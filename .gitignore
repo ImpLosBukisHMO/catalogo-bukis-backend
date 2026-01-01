@@ -28,6 +28,18 @@ coverage
 # nyc test coverage
 .nyc_output
 
+# macOS
+.DS_Store
+
+# SQLite local
+db.sqlite3
+db.sqlite3.bak
+*.sqlite3
+*.sqlite3-journal
+
+# Django uploads
+media/
+
 # Grunt intermediate storage (https://gruntjs.com/creating-plugins#storing-task-files)
 .grunt
 
