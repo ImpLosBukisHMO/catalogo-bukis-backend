@@ -8,6 +8,11 @@ lerna-debug.log*
 
 # Python virtual environment
 venv
+.venv/
+
+__pycache__/
+*.pyc
+
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json

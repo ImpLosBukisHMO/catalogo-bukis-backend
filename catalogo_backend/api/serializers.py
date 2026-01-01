@@ -12,9 +12,21 @@ class CategoriasSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class ProductosSerializer(serializers.ModelSerializer):
+    # Si no mandas el campo, pone un default razonable
+    colores_meta_datos = serializers.JSONField(
+        required=False,
+        default=lambda: {"colores": []}
+    )
+
+    def validate_colores_meta_datos(self, value):
+        # Por el browsable API a veces llega como None o como string "null"
+        if value is None or value == "null":
+            return {"colores": []}
+        return value
+
     class Meta:
         model = ProductosModel
-        fields = '__all__'
+        fields = "__all__"
 
 class ProductosFavoritosSerializer(serializers.ModelSerializer):
     class Meta:

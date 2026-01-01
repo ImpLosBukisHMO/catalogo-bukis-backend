@@ -10,13 +10,16 @@ class UsuariosModel(models.Model):
     rol = models.CharField(max_length=20, null=False)       # ej.: 'admin', 'cliente'
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
+    def __str__(self):
+        return self.nombre
 
 # Categorias de productos.
 class CategoriasModel(models.Model):
     nombre = models.CharField(max_length=50, null=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    def __str__(self):
+        return self.nombre
 
 
 # Productos.
@@ -36,12 +39,21 @@ class ProductosModel(models.Model):
     categoria = models.ForeignKey(CategoriasModel, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
-
+    def __str__(self):
+        return self.nombre
 # Productos favoritos.
 class ProductosFavoritosModel(models.Model):
     usuario = models.ForeignKey(UsuariosModel, on_delete=models.CASCADE)
     producto = models.ForeignKey(ProductosModel, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["usuario", "producto"],
+                name="uniq_usuario_producto_favorito",
+            )
+        ]
+
 
 # Pedidos de los clientes.
 class PedidosModel(models.Model):

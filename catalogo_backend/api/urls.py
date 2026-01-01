@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import mockViews, usuariosViews, categoriasViews, direccionesViews, pedidosViews, pedidoProductosViews
+from .views import mockViews, usuariosViews, categoriasViews, direccionesViews, pedidosViews, pedidoProductosViews, productosViews, productosFavoritosViews
 
 # Backend API endpoints
 urlpatterns = [
@@ -15,4 +15,8 @@ urlpatterns = [
     path('pedidos/<int:id>', pedidosViews.PedidosRetrieveUpdateDestroy.as_view(), name='pedido-update'),
     path('pedido-productos/', pedidoProductosViews.PedidoProductosListCreate.as_view(), name='pedido-producto-view-create'),
     path('pedido-productos/<int:id>', pedidoProductosViews.PedidoProductosRetrieveUpdateDestroy.as_view(), name='pedido-producto-update'),
+    path("productos/", productosViews.ProductosListCreate.as_view(), name="producto-view-create"),
+    path("productos/<int:id>", productosViews.ProductosRetrieveUpdateDestroy.as_view(), name="producto-update"),
+    path("productos-favoritos/", productosFavoritosViews.ProductosFavoritosListCreate.as_view(), name="producto-favorito-view-create"),
+    path("productos-favoritos/<int:id>", productosFavoritosViews.ProductosFavoritosRetrieveUpdateDestroy.as_view(), name="producto-favorito-update"),
 ]
