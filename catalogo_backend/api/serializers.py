@@ -1,10 +1,23 @@
 from rest_framework import serializers
 from api.models import *
+from . import services
 
 class UsuariosSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(read_only=True)
+    nombre = serializers.CharField(max_length=100)
+    apellido = serializers.CharField(max_length=100)
+    correo = serializers.EmailField()
+    telefono = serializers.CharField(max_length=30)
+    password = serializers.CharField(write_only=True)
+
+    def to_internal_value(self, data):
+        datos = super().to_internal_value(data)
+        return services.DataClassUsuarios(**datos)
+    
     class Meta:
         model = UsuariosModel
-        fields = '__all__'
+        fields = ['nombre', 'apellido', 'correo', 'telefono', 'password', 'id']
+
 
 class CategoriasSerializer(serializers.ModelSerializer):
     class Meta:

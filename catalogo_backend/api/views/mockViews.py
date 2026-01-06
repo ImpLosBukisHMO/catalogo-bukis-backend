@@ -1,4 +1,3 @@
-from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from api.models import *
@@ -7,15 +6,10 @@ from ..serializers import *
 # Initial mock response.
 @api_view(['GET'])
 def getMockData(request):
-    data = {
-        'usuario_de_prueba': {
-            'id': 1,
-            'nombre': 'Juan',
-            'apellido': 'Medina',
-            'correo_electronico': 'juan.medina2@email.com'
-            }
+    datos = {
+        'mensaje': 'Bienvenido a la API del Catálogo de Importaciones Los Bukis.'
         }
-    return Response(data)
+    return Response(datos)
 
 # Mock data w/ req param.
 @api_view(['GET'])

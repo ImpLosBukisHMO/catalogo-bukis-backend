@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from api.models import UsuariosModel
 from ..serializers import UsuariosSerializer
 
+
 """
 ////////////////////////////
 Views de usuarios
@@ -14,15 +15,15 @@ class UsuariosListCreate(generics.ListCreateAPIView):
     serializer_class = UsuariosSerializer
 
     def post(self, request, *args, **kwargs):
-        serializer = UsuariosSerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return Response({'mensaje':'Usuario creado existosamente.', 'datos': request.data}, status=status.HTTP_201_CREATED)
+            return Response({'mensaje':'Usuario creado existosamente.', 'datos': serializer.data}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def get(self, request, *args, **kwargs):
-        usuarios = UsuariosModel.objects.all()
-        serializer = UsuariosSerializer(usuarios, many=True)
+        usuarios = self.get_queryset()
+        serializer = self.get_serializer(usuarios, many=True)
         return Response({'datos': serializer.data}, status=status.HTTP_200_OK)
 
 
