@@ -10,6 +10,14 @@ class AdminDireccion(admin.ModelAdmin):
 class AdminCategorias(admin.ModelAdmin):
     list_display = ('id', 'nombre')
 
+class AdminPedidos(admin.ModelAdmin):
+    list_display = ('id', 'cliente', 'precio_total')
+
+class AdminPedidoProductos(admin.ModelAdmin):
+    list_display = ('id', 'pedido', 'producto', 'cantidad', 'color', 'precio_unitario_producto')
+
 admin.site.register(models.UsuariosModel, AdminUsuario)
 admin.site.register(models.DireccionesModel, AdminDireccion)
 admin.site.register(models.CategoriasModel, AdminCategorias)
+admin.site.register(models.PedidosModel, AdminPedidos)
+admin.site.register(models.PedidoProductosModel, AdminPedidoProductos)

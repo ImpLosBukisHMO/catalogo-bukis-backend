@@ -1,9 +1,11 @@
 import dataclasses
 import datetime
 import jwt
-from .models import UsuariosModel
+from .models import UsuariosModel, PedidosModel
 from django.conf import settings
 
+
+#Usuarios
 @dataclasses.dataclass
 class DataClassUsuarios:
     nombre: str
@@ -51,3 +53,11 @@ def obtenerToken(idUsuario):
 
     token = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm='HS256')
     return token
+
+
+
+
+#Pedidos (WIP)
+def obtenerPedosPorCliente(idCliente):
+    pedidos = PedidosModel.objects.filter(cliente=idCliente)
+    return pedidos
