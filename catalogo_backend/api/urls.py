@@ -12,8 +12,8 @@ urlpatterns = [
     path('direcciones/<int:id>', direccionesViews.DireccionesRetrieveUpdateDestroy.as_view(), name='direccion-update'),
     path('pedidos/', pedidosViews.PedidosListCreate.as_view(), name='pedido-view-create'),
     path('pedidos/<int:id>', pedidosViews.PedidosRetrieveUpdateDestroy.as_view(), name='pedido-update'),
-    path('pedido-productos/', pedidoProductosViews.PedidoProductosListCreate.as_view(), name='pedido-producto-view-create'),
-    path('pedido-productos/<int:id>', pedidoProductosViews.PedidoProductosRetrieveUpdateDestroy.as_view(), name='pedido-producto-update'),
+    path('pedido-productos/', pedidosViews.PedidoProductosListCreate.as_view(), name='pedido-producto-view-create'),
+    path('pedido-productos/<int:id>', pedidosViews.PedidoProductosRetrieveUpdateDestroy.as_view(), name='pedido-producto-update'),
 ]
 
 urlpatterns += usuariosURLs.urlsUsuarios
