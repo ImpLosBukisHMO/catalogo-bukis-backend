@@ -58,6 +58,6 @@ def obtenerToken(idUsuario):
 
 
 #Pedidos (WIP)
-def obtenerPedosPorCliente(idCliente):
+def obtenerPedidosPorCliente(idCliente):
     pedidos = PedidosModel.objects.filter(cliente=idCliente)
     return pedidos

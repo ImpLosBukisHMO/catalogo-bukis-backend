@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import mockViews, usuariosViews, categoriasViews, direccionesViews, pedidosViews, pedidoProductosViews
+from .views import mockViews, usuariosViews, categoriasViews, direccionesViews, pedidosViews
 from . import apis
 from .routes import usuariosURLs
 

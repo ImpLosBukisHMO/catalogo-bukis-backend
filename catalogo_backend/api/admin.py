@@ -11,7 +11,7 @@ class AdminCategorias(admin.ModelAdmin):
     list_display = ('id', 'nombre')
 
 class AdminPedidos(admin.ModelAdmin):
-    list_display = ('id', 'cliente', 'precio_total')
+    list_display = ('id', 'clave', 'cliente', 'precio_total')
 
 class AdminPedidoProductos(admin.ModelAdmin):
     list_display = ('id', 'pedido', 'producto', 'cantidad', 'color', 'precio_unitario_producto')
