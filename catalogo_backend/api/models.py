@@ -1,8 +1,13 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
+from django.core.validators import RegexValidator
 import uuid
 import os
 
+hex_color_validator = RegexValidator(
+    regex=r"^#[0-9A-Fa-f]{6}$",
+    message="El color hex debe venir como #RRGGBB, por ejemplo #FFAA00",
+)
 
 def get_product_image_path(instance, filename):
     ext = filename.split('.')[-1]
@@ -91,6 +96,8 @@ class CategoriasModel(models.Model):
     nombre = models.CharField(max_length=50, null=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    def __str__(self):
+        return self.nombre
 
 
 # Productos.
@@ -103,12 +110,59 @@ class ProductosModel(models.Model):
     peso = models.DecimalField(max_digits=10, decimal_places=2, null=False)
     medidas = models.TextField(null=False)
     capacidad = models.CharField(max_length=50, null=True, blank=True)
-    colores_meta_datos = models.JSONField(default=default_color_metadata)
     categoria = models.ForeignKey(CategoriasModel, on_delete=models.CASCADE)
     #activo = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    def __str__(self):
+        return self.nombre
 
+# Colores.
+class ColorModel(models.Model):
+    nombre = models.CharField(max_length=50, unique=True)
+    hex = models.CharField(max_length=7, unique=True, validators=[hex_color_validator])
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "colores"
+        ordering = ["nombre"]
+
+    def __str__(self) -> str:
+        return f"{self.nombre} ({self.hex})"
+
+# Productos X Color
+class ProductoColorModel(models.Model):
+    producto = models.ForeignKey(
+        "ProductosModel",
+        on_delete=models.CASCADE,
+        related_name="producto_colores",
+    )
+    color = models.ForeignKey(
+        ColorModel,
+        on_delete=models.PROTECT,
+        related_name="color_productos",
+    )
+
+    # stock opcional, útil si el cliente quiere inventario por color
+    stock = models.PositiveIntegerField(default=0)
+    activo = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "producto_colores"
+        constraints = [
+            models.UniqueConstraint(fields=["producto", "color"], name="uniq_producto_color"),
+        ]
+        indexes = [
+            models.Index(fields=["producto"]),
+            models.Index(fields=["color"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"Producto {self.producto_id} - Color {self.color_id} - Stock {self.stock}"
 
 # Productos favoritos.
 class ProductosFavoritosModel(models.Model):
