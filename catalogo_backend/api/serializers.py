@@ -1,11 +1,11 @@
 from rest_framework import serializers
 from .models import (
-    ProductosModel, ColorModel, ProductoColorModel,
+    ProductosModel, ColorModel, ProductoVariantesModel,
     DireccionesModel, PedidosModel, PedidoProductosModel,
-    ProductosFavoritosModel, CategoriasModel, UsuariosModel
+    ProductosFavoritosModel, CategoriasModel, UsuariosModel,
+    ProductosImagenesModel
 )
 from . import services
-
 
 class UsuariosSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(read_only=True)
@@ -62,8 +62,38 @@ class ColorMiniSerializer(serializers.ModelSerializer):
         model = ColorModel
         fields = ["id", "nombre", "hex"]
 
+class ProductosImagenesSerializer(serializers.ModelSerializer):
+    producto = serializers.IntegerField(source="producto_id", read_only=True)
+    variante = serializers.IntegerField(source="variante_id", read_only=True)
 
-class ProductoColorSerializer(serializers.ModelSerializer):
+    producto_id = serializers.PrimaryKeyRelatedField(
+        queryset=ProductosModel.objects.all(),
+        source="producto",
+        write_only=True
+    )
+    variante_id = serializers.PrimaryKeyRelatedField(
+        queryset=ProductoVariantesModel.objects.all(),
+        source="variante",
+        write_only=True,
+        required=False,
+        allow_null=True
+    )
+
+    class Meta:
+        model = ProductosImagenesModel
+        fields = [
+            "id",
+            "producto", "producto_id",
+            "variante", "variante_id",
+            "imagen",
+            "orden",
+            "es_principal",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class ProductoVariantesSerializer(serializers.ModelSerializer):
     producto = ProductoMiniSerializer(read_only=True)
     color = ColorMiniSerializer(read_only=True)
 
@@ -81,7 +111,7 @@ class ProductoColorSerializer(serializers.ModelSerializer):
     disponible = serializers.SerializerMethodField()
 
     class Meta:
-        model = ProductoColorModel
+        model = ProductoVariantesModel
         fields = [
             "id",
             "producto", "producto_id",
@@ -96,12 +126,12 @@ class ProductoColorSerializer(serializers.ModelSerializer):
     def get_disponible(self, obj):
         return obj.activo and obj.stock > 0
 
-class ProductoColorEnProductoSerializer(serializers.ModelSerializer):
+class ProductoVariantesEnProductoSerializer(serializers.ModelSerializer):
     color = ColorMiniSerializer(read_only=True)
     disponible = serializers.SerializerMethodField()
 
     class Meta:
-        model = ProductoColorModel
+        model = ProductoVariantesModel
         fields = ["id", "color", "stock", "activo", "disponible", "created_at", "updated_at"]
 
     def get_disponible(self, obj):
@@ -109,7 +139,7 @@ class ProductoColorEnProductoSerializer(serializers.ModelSerializer):
 
 
 class ProductoDetalleSerializer(serializers.ModelSerializer):
-    variantes = ProductoColorEnProductoSerializer(source="producto_colores", many=True, read_only=True)
+    variantes = ProductoVariantesEnProductoSerializer(source="producto_colores", many=True, read_only=True)
 
     class Meta:
         model = ProductosModel
@@ -124,8 +154,8 @@ class ProductoDetalleSerializer(ProductosSerializer):
     variantes = serializers.SerializerMethodField()
 
     def get_variantes(self, obj):
-        qs = ProductoColorModel.objects.filter(producto=obj).select_related("color")
-        return ProductoColorSerializer(qs, many=True).data
+        qs = ProductoVariantesModel.objects.filter(producto=obj).select_related("color")
+        return ProductoVariantesSerializer(qs, many=True).data
 
     class Meta(ProductosSerializer.Meta):
         fields = ProductosSerializer.Meta.fields + ["variantes"]

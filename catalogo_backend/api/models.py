@@ -131,8 +131,8 @@ class ColorModel(models.Model):
     def __str__(self) -> str:
         return f"{self.nombre} ({self.hex})"
 
-# Productos X Color
-class ProductoColorModel(models.Model):
+# Productos X Color 
+class ProductoVariantesModel(models.Model):
     producto = models.ForeignKey(
         "ProductosModel",
         on_delete=models.CASCADE,
@@ -163,6 +163,35 @@ class ProductoColorModel(models.Model):
 
     def __str__(self) -> str:
         return f"Producto {self.producto_id} - Color {self.color_id} - Stock {self.stock}"
+
+# ProductosImagenes 
+class ProductosImagenesModel(models.Model):
+    producto = models.ForeignKey(
+        ProductosModel,
+        on_delete=models.CASCADE,
+        related_name="imagenes"
+    )
+
+    variante = models.ForeignKey(
+        ProductoVariantesModel,
+        on_delete=models.CASCADE,
+        related_name="imagenes",
+        null=True,
+        blank=True
+    )
+
+    imagen = models.ImageField(upload_to="img/products/galeria/")
+    orden = models.PositiveIntegerField(default=0)
+    es_principal = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["orden", "id"]
+        indexes = [
+            models.Index(fields=["producto", "variante"]),
+        ]
 
 # Productos favoritos.
 class ProductosFavoritosModel(models.Model):
