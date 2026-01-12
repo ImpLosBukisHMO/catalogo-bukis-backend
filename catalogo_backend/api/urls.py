@@ -13,6 +13,10 @@ from .views.productoVariantesViews import (
     ProductoVariantesListCreateView,
     ProductoVariantesDetailView,
 )
+from .views.productosImagenesViews import (
+    ProductosImagenesListCreateView,
+    ProductosImagenesDetailView,
+)
 from .routes import usuariosURLs
 
 urlpatterns = [
@@ -49,6 +53,10 @@ urlpatterns = [
     # Productos
     path("productos/", ProductosListCreate.as_view(), name="productos-list-create"),
     path("productos/<int:id>/", ProductosRetrieveUpdateDestroy.as_view(), name="producto-detail"),
+
+    path("productos-imagenes/", ProductosImagenesListCreateView.as_view(), name="productos-imagenes-list-create"),
+    path("productos-imagenes/<int:id>/", ProductosImagenesDetailView.as_view(), name="productos-imagenes-detail"),
+
 ]
 
 urlpatterns += usuariosURLs.urlsUsuarios

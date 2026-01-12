@@ -2,10 +2,10 @@ from rest_framework import serializers
 from .models import (
     ProductosModel, ColorModel, ProductoVariantesModel,
     DireccionesModel, PedidosModel, PedidoProductosModel,
-    ProductosFavoritosModel, CategoriasModel, UsuariosModel
+    ProductosFavoritosModel, CategoriasModel, UsuariosModel,
+    ProductosImagenesModel
 )
 from . import services
-
 
 class UsuariosSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(read_only=True)
@@ -61,6 +61,36 @@ class ColorMiniSerializer(serializers.ModelSerializer):
     class Meta:
         model = ColorModel
         fields = ["id", "nombre", "hex"]
+
+class ProductosImagenesSerializer(serializers.ModelSerializer):
+    producto = serializers.IntegerField(source="producto_id", read_only=True)
+    variante = serializers.IntegerField(source="variante_id", read_only=True)
+
+    producto_id = serializers.PrimaryKeyRelatedField(
+        queryset=ProductosModel.objects.all(),
+        source="producto",
+        write_only=True
+    )
+    variante_id = serializers.PrimaryKeyRelatedField(
+        queryset=ProductoVariantesModel.objects.all(),
+        source="variante",
+        write_only=True,
+        required=False,
+        allow_null=True
+    )
+
+    class Meta:
+        model = ProductosImagenesModel
+        fields = [
+            "id",
+            "producto", "producto_id",
+            "variante", "variante_id",
+            "imagen",
+            "orden",
+            "es_principal",
+            "created_at",
+            "updated_at",
+        ]
 
 
 class ProductoVariantesSerializer(serializers.ModelSerializer):
