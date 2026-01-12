@@ -131,8 +131,8 @@ class ColorModel(models.Model):
     def __str__(self) -> str:
         return f"{self.nombre} ({self.hex})"
 
-# Productos X Color
-class ProductoColorModel(models.Model):
+# Productos X Color 
+class ProductoVariantesModel(models.Model):
     producto = models.ForeignKey(
         "ProductosModel",
         on_delete=models.CASCADE,
