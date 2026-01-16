@@ -111,7 +111,7 @@ class ProductosModel(models.Model):
     medidas = models.TextField(null=False)
     capacidad = models.CharField(max_length=50, null=True, blank=True)
     categoria = models.ForeignKey(CategoriasModel, on_delete=models.CASCADE)
-    #activo = models.BooleanField(default=True)
+    disponible = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     def __str__(self):

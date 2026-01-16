@@ -55,6 +55,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
+    'django.middleware.common.CommonMiddleware',
 ]
 
 ROOT_URLCONF = 'catalogo_backend.urls'
@@ -137,3 +139,7 @@ AUTH_USER_MODEL = 'api.UsuariosModel'
 CORS_ORIGIN_ALLOW_ALL = True
 
 CORS_ALLOW_CREDENTIALS = True
+
+MEDIA_URL = '/'
+
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')

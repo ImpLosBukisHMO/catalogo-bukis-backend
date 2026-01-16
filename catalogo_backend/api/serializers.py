@@ -46,6 +46,7 @@ class ProductosSerializer(serializers.ModelSerializer):
             "medidas",
             "capacidad",
             "categoria",
+            "disponible",
             "created_at",
             "updated_at",
         ]
