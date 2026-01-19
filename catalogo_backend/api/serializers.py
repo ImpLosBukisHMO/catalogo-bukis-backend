@@ -7,6 +7,7 @@ from .models import (
 )
 from . import services
 
+
 class UsuariosSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(read_only=True)
     password = serializers.CharField(write_only=True)
@@ -61,6 +62,7 @@ class ColorMiniSerializer(serializers.ModelSerializer):
     class Meta:
         model = ColorModel
         fields = ["id", "nombre", "hex"]
+
 
 class ProductosImagenesSerializer(serializers.ModelSerializer):
     producto = serializers.IntegerField(source="producto_id", read_only=True)
@@ -126,6 +128,7 @@ class ProductoVariantesSerializer(serializers.ModelSerializer):
     def get_disponible(self, obj):
         return obj.activo and obj.stock > 0
 
+
 class ProductoVariantesEnProductoSerializer(serializers.ModelSerializer):
     color = ColorMiniSerializer(read_only=True)
     disponible = serializers.SerializerMethodField()
@@ -138,24 +141,16 @@ class ProductoVariantesEnProductoSerializer(serializers.ModelSerializer):
         return obj.activo and obj.stock > 0
 
 
-class ProductoDetalleSerializer(serializers.ModelSerializer):
-    variantes = ProductoVariantesEnProductoSerializer(source="producto_colores", many=True, read_only=True)
-
-    class Meta:
-        model = ProductosModel
-        fields = [
-            "id", "nombre", "item", "imagen", "descripcion", "precio", "peso",
-            "medidas", "capacidad", "categoria", "created_at", "updated_at",
-            "variantes"
-        ]
-
-
 class ProductoDetalleSerializer(ProductosSerializer):
     variantes = serializers.SerializerMethodField()
 
     def get_variantes(self, obj):
-        qs = ProductoVariantesModel.objects.filter(producto=obj).select_related("color")
-        return ProductoVariantesSerializer(qs, many=True).data
+        qs = (
+            ProductoVariantesModel.objects
+            .filter(producto=obj)
+            .select_related("color")
+        )
+        return ProductoVariantesEnProductoSerializer(qs, many=True).data
 
     class Meta(ProductosSerializer.Meta):
         fields = ProductosSerializer.Meta.fields + ["variantes"]

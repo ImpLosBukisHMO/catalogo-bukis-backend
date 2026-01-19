@@ -12,7 +12,7 @@ hex_color_validator = RegexValidator(
 def get_product_image_path(instance, filename):
     ext = filename.split('.')[-1]
     filename = f"{uuid.uuid4()}.{ext}"
-    return os.path.join('media/img/products/', filename)
+    return os.path.join('img/products/', filename)
 
 def default_color_metadata():
     return {"colores": []}
