@@ -3,10 +3,19 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 
 from api.permissions import IsWorker
-from api.models import ProductoVariantesModel
-from api.serializer.worker import WorkerVariantSerializer
+from api.models import (
+    ProductoVariantesModel,
+    PedidosModel,
+)
+from api.serializer.worker import (
+    WorkerVariantSerializer,
+    WorkerPedidoSerializer,
+)
 
 
+# =========================
+# WORKER - VARIANTS
+# =========================
 class WorkerVariantListView(APIView):
     permission_classes = [IsAuthenticated, IsWorker]
 
@@ -22,4 +31,22 @@ class WorkerVariantListView(APIView):
         )
 
         serializer = WorkerVariantSerializer(qs, many=True)
+        return Response(serializer.data)
+
+
+# =========================
+# WORKER - PEDIDOS
+# =========================
+class WorkerPedidoListView(APIView):
+    permission_classes = [IsAuthenticated, IsWorker]
+
+    def get(self, request):
+        qs = (
+            PedidosModel.objects
+            .select_related("cliente")
+            .prefetch_related("items")
+            .order_by("-created_at")
+        )
+
+        serializer = WorkerPedidoSerializer(qs, many=True)
         return Response(serializer.data)

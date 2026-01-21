@@ -9,7 +9,8 @@ from .views import (
     coloresViews, 
     carritoViews,
 )
-from api.views.workerViews import WorkerVariantListView
+from api.views.workerViews import WorkerVariantListView 
+from api.views.workerViews import WorkerPedidoListView
 
 from api.views.productosViews import ProductosListCreate, ProductosRetrieveUpdateDestroy
 from .views.productoVariantesViews import (
@@ -70,8 +71,9 @@ urlpatterns = [
     path("auth/login/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
 
-    path("worker/variants/", WorkerVariantListView.as_view(), name="worker-variants",
-    ),
+    path("worker/variants/", WorkerVariantListView.as_view(), name="worker-variants"),
+    path("worker/pedidos/", WorkerPedidoListView.as_view(), name="worker-pedidos"),
+    
 ]
 
 urlpatterns += usuariosURLs.urlsUsuarios

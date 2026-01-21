@@ -1,9 +1,13 @@
+# Aquí van todos los serializers del worker
+
 from rest_framework import serializers
 from api.models import (
     ProductoVariantesModel,
     ProductosImagenesModel,
+    PedidosModel
 )
 
+# para productos
 class WorkerVariantSerializer(serializers.ModelSerializer):
     variant_id = serializers.IntegerField(source="id")
 
@@ -66,3 +70,28 @@ class WorkerVariantSerializer(serializers.ModelSerializer):
             )
 
         return img.imagen.url if img else None
+
+
+# para pedidos
+class WorkerPedidoSerializer(serializers.ModelSerializer):
+    cliente = serializers.SerializerMethodField()
+    items_count = serializers.IntegerField(source="items.count", read_only=True)
+
+    class Meta:
+        model = PedidosModel
+        fields = [
+            "id",
+            "public_id",
+            "cliente",
+            "estado",
+            "precio_total",
+            "items_count",
+            "created_at",
+        ]
+
+    def get_cliente(self, obj):
+        return {
+            "id": obj.cliente.id,
+            "nombre": f"{obj.cliente.nombre} {obj.cliente.apellido}",
+            "correo": obj.cliente.correo,
+        }
