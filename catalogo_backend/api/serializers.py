@@ -260,3 +260,14 @@ class CarritoReadSerializer(serializers.ModelSerializer):
         for it in qs:
             total += (it.variante.producto.precio * it.cantidad)
         return total
+
+class WorkerVariantSerializer(serializers.Serializer):
+    variant_id = serializers.IntegerField()
+
+    producto = serializers.SerializerMethodField()
+    color = ColorMiniSerializer()
+
+    stock = serializers.IntegerField()
+    disponible = serializers.BooleanField()
+
+    imagen_principal = serializers.SerializerMethodField()
