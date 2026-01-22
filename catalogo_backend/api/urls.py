@@ -11,6 +11,7 @@ from .views import (
 )
 from api.views.workerViews import WorkerVariantListView 
 from api.views.workerViews import WorkerPedidoListView
+from api.views.usuariosViews import MiUsuarioView
 
 from api.views.productosViews import ProductosListCreate, ProductosRetrieveUpdateDestroy
 from .views.productoVariantesViews import (
@@ -25,6 +26,8 @@ from .routes import usuariosURLs
 
 urlpatterns = [
     path("", mockViews.getMockData),
+
+    path("mi_usuario/", MiUsuarioView.as_view(), name="mi-usuario"),
 
     # Categorías
     path("categorias/", categoriasViews.CategoriasListCreate.as_view(), name="categoria-view-create"),

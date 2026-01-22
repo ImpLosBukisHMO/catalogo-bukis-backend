@@ -3,7 +3,11 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from api.models import UsuariosModel
 from ..serializers import UsuariosSerializer
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
+from api.serializer.client import MeSerializer
 
 """
 ////////////////////////////
@@ -62,3 +66,12 @@ class UsuariosRetrieveUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
         instance = self.get_object()
         instance.delete()
         return Response({'mensaje': 'Usuario eliminado con éxito.'}, status=status.HTTP_200_OK)
+    
+
+# para saber que tipo es el usuario
+class MiUsuarioView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        serializer = MeSerializer(request.user)
+        return Response(serializer.data)
