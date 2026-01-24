@@ -3,25 +3,36 @@ from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.validators import RegexValidator
 import uuid
 import os
+from django.utils import timezone
 
 hex_color_validator = RegexValidator(
     regex=r"^#[0-9A-Fa-f]{6}$",
     message="El color hex debe venir como #RRGGBB, por ejemplo #FFAA00",
 )
 
+
 def get_product_image_path(instance, filename):
-    ext = filename.split('.')[-1]
+    ext = filename.split(".")[-1]
     filename = f"{uuid.uuid4()}.{ext}"
-    return os.path.join('media/img/products/', filename)
+    return os.path.join("img/products/", filename)
+
 
 def default_color_metadata():
     return {"colores": []}
 
+
 # Administrador de cuentas.
-class AdministradorDeUsuarios(BaseUserManager): 
-    def create_user(self, nombre, apellido, correo, telefono, 
-                    password=None, staff=False, superuser=False):
-        
+class AdministradorDeUsuarios(BaseUserManager):
+    def create_user(
+        self,
+        nombre,
+        apellido,
+        correo,
+        telefono,
+        password=None,
+        staff=False,
+        superuser=False,
+    ):
         if not correo:
             raise ValueError("El usuario debe tener un correo electrónico.")
         if not nombre:
@@ -32,7 +43,7 @@ class AdministradorDeUsuarios(BaseUserManager):
             raise ValueError("El usuario debe tener un número de teléfono.")
         if not password:
             raise ValueError("El usuario debe tener una contraseña.")
-        
+
         usuario = self.model(correo=self.normalize_email(correo))
         usuario.nombre = nombre
         usuario.apellido = apellido
@@ -44,7 +55,7 @@ class AdministradorDeUsuarios(BaseUserManager):
         usuario.save()
 
         return usuario
-    
+
     def create_superuser(self, nombre, apellido, correo, telefono, password):
         usuario = self.create_user(
             nombre=nombre,
@@ -53,7 +64,7 @@ class AdministradorDeUsuarios(BaseUserManager):
             telefono=telefono,
             password=password,
             staff=True,
-            superuser=True
+            superuser=True,
         )
         usuario.is_admin = True
         usuario.save()
@@ -64,11 +75,11 @@ class AdministradorDeUsuarios(BaseUserManager):
 # Usuarios (cliente, admin).
 class UsuariosModel(AbstractUser):
     username = None
-    nombre = models.CharField(max_length=100, null=False, default='', verbose_name='Nombre(s)')
-    apellido = models.CharField(max_length=100, null=False, default='', verbose_name='Apellido(s)')
-    correo = models.EmailField(unique=True, verbose_name='Correo electrónico')
-    telefono = models.CharField(max_length=30, null=False, verbose_name='Teléfono')
-    password = models.CharField(max_length=255, null=False, verbose_name='Contraseña')
+    nombre = models.CharField(max_length=100, null=False, default="", verbose_name="Nombre(s)")
+    apellido = models.CharField(max_length=100, null=False, default="", verbose_name="Apellido(s)")
+    correo = models.EmailField(unique=True, verbose_name="Correo electrónico")
+    telefono = models.CharField(max_length=30, null=False, verbose_name="Teléfono")
+    password = models.CharField(max_length=255, null=False, verbose_name="Contraseña")
     is_active = models.BooleanField(default=True)
     is_admin = models.BooleanField(default=False)
     is_superuser = models.BooleanField(default=False)
@@ -76,17 +87,17 @@ class UsuariosModel(AbstractUser):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    USERNAME_FIELD = 'correo'
-    REQUIRED_FIELDS = ['nombre', 'apellido', 'telefono']
+    USERNAME_FIELD = "correo"
+    REQUIRED_FIELDS = ["nombre", "apellido", "telefono"]
 
     objects = AdministradorDeUsuarios()
 
     def __str__(self):
         return f"{self.nombre} {self.apellido}"
-    
+
     def has_module_perms(self, app_label):
         return True
-    
+
     def has_perm(self, perm, obj=None):
         return self.is_admin
 
@@ -96,6 +107,7 @@ class CategoriasModel(models.Model):
     nombre = models.CharField(max_length=50, null=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
     def __str__(self):
         return self.nombre
 
@@ -110,12 +122,14 @@ class ProductosModel(models.Model):
     peso = models.DecimalField(max_digits=10, decimal_places=2, null=False)
     medidas = models.TextField(null=False)
     capacidad = models.CharField(max_length=50, null=True, blank=True)
-    categoria = models.ForeignKey(CategoriasModel, on_delete=models.CASCADE)
     disponible = models.BooleanField(default=True)
+    categoria = models.ForeignKey(CategoriasModel, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
     def __str__(self):
         return self.nombre
+
 
 # Colores.
 class ColorModel(models.Model):
@@ -131,7 +145,8 @@ class ColorModel(models.Model):
     def __str__(self) -> str:
         return f"{self.nombre} ({self.hex})"
 
-# Productos X Color 
+
+# Productos X Color (variantes por color).
 class ProductoVariantesModel(models.Model):
     producto = models.ForeignKey(
         "ProductosModel",
@@ -144,9 +159,11 @@ class ProductoVariantesModel(models.Model):
         related_name="color_productos",
     )
 
-    # stock opcional, útil si el cliente quiere inventario por color
     stock = models.PositiveIntegerField(default=0)
     activo = models.BooleanField(default=True)
+
+    # Opcional a futuro: precio específico por variante
+    # precio_override = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -164,20 +181,20 @@ class ProductoVariantesModel(models.Model):
     def __str__(self) -> str:
         return f"Producto {self.producto_id} - Color {self.color_id} - Stock {self.stock}"
 
-# ProductosImagenes 
+
+# ProductosImagenes (galería y principal por producto o por variante).
 class ProductosImagenesModel(models.Model):
     producto = models.ForeignKey(
         ProductosModel,
         on_delete=models.CASCADE,
-        related_name="imagenes"
+        related_name="imagenes",
     )
-
     variante = models.ForeignKey(
         ProductoVariantesModel,
         on_delete=models.CASCADE,
         related_name="imagenes",
         null=True,
-        blank=True
+        blank=True,
     )
 
     imagen = models.ImageField(upload_to="img/products/galeria/")
@@ -193,27 +210,11 @@ class ProductosImagenesModel(models.Model):
             models.Index(fields=["producto", "variante"]),
         ]
 
+
 # Productos favoritos.
 class ProductosFavoritosModel(models.Model):
     usuario = models.ForeignKey(UsuariosModel, on_delete=models.CASCADE)
     producto = models.ForeignKey(ProductosModel, on_delete=models.CASCADE)
-
-# Pedidos de los clientes.
-class PedidosModel(models.Model):
-    cliente = models.ForeignKey(UsuariosModel, on_delete=models.CASCADE)
-    clave = models.CharField(max_length=255, null=False)
-    precio_total = models.DecimalField(max_digits=10, decimal_places=2)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-
-# Productos dentro de los pedidos.
-class PedidoProductosModel(models.Model):
-    pedido = models.ForeignKey(PedidosModel, on_delete=models.CASCADE)
-    producto = models.ForeignKey(ProductosModel, on_delete=models.CASCADE)
-    cantidad = models.IntegerField(null=False)
-    color = models.CharField(max_length=50, null=False)
-    precio_unitario_producto = models.DecimalField(max_digits=10, decimal_places=2)
 
 
 # Direcciones de los usuarios.
@@ -227,3 +228,154 @@ class DireccionesModel(models.Model):
     pais = models.CharField(max_length=50, null=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+# =========================
+# NUEVO: Carrito
+# =========================
+
+class CarritoModel(models.Model):
+    class EstadoCarrito(models.TextChoices):
+        ACTIVO = "ACTIVE", "Activo"
+        CONVERTIDO = "CONVERTED", "Convertido"
+
+    cliente = models.ForeignKey(UsuariosModel, on_delete=models.CASCADE, related_name="carritos")
+    estado = models.CharField(max_length=20, choices=EstadoCarrito.choices, default=EstadoCarrito.ACTIVO)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["cliente", "estado"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"Carrito {self.id} - Cliente {self.cliente_id} - {self.estado}"
+
+
+class CarritoItemModel(models.Model):
+    carrito = models.ForeignKey(CarritoModel, on_delete=models.CASCADE, related_name="items")
+    variante = models.ForeignKey(ProductoVariantesModel, on_delete=models.PROTECT, related_name="carrito_items")
+    cantidad = models.PositiveIntegerField(default=1)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["carrito", "variante"], name="uniq_carrito_variante"),
+        ]
+        indexes = [
+            models.Index(fields=["carrito"]),
+            models.Index(fields=["variante"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"Carrito {self.carrito_id} - Variante {self.variante_id} - Cant {self.cantidad}"
+
+
+# =========================
+# Pedidos con estados y snapshots
+# =========================
+
+class PedidosModel(models.Model):
+    class EstadoPedido(models.TextChoices):
+        PENDIENTE = "PENDING", "Pendiente"
+        APROBADO = "APPROVED", "Aprobado"
+        DENEGADO = "DENIED", "Denegado"
+        LISTO = "READY", "Listo"
+        COMPLETADO = "COMPLETED", "Completado"
+        CANCELADO = "CANCELED", "Cancelado"
+
+    cliente = models.ForeignKey(UsuariosModel, on_delete=models.CASCADE, related_name="pedidos")
+
+    # Legacy: respeta lo que ya existe en BD / lo que usa tu compañero
+    clave = models.CharField(max_length=255, null=False)
+
+    # Nuevo: id público estable y único para APIs / UI
+#    public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False, null=True, blank=True)
+
+
+    estado = models.CharField(
+        max_length=20,
+        choices=EstadoPedido.choices,
+        default=EstadoPedido.PENDIENTE,
+    )
+
+    direccion = models.ForeignKey(
+        DireccionesModel,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+
+    subtotal_snapshot = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    precio_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    aprobado_eta = models.DateTimeField(null=True, blank=True)
+    denegado_razon = models.TextField(null=True, blank=True)
+
+    nota_cliente = models.TextField(null=True, blank=True)
+    nota_worker = models.TextField(null=True, blank=True)
+
+
+
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(default=timezone.now)
+
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["cliente", "estado"]),
+            models.Index(fields=["estado", "created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"Pedido {self.id} - Cliente {self.cliente_id} - {self.estado}"
+
+
+class PedidoProductosModel(models.Model):
+    pedido = models.ForeignKey(PedidosModel, on_delete=models.CASCADE, related_name="items")
+
+    # Nuevo: referencia a variante (nullable para que el pedido no se rompa si borran la variante)
+    variante = models.ForeignKey(
+        ProductoVariantesModel,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="pedido_items",
+    )
+
+    cantidad = models.PositiveIntegerField(null=False)
+
+    # Snapshots por línea (lo que el cliente compró en ese momento)
+    producto_nombre_snapshot = models.CharField(max_length=100, null=False, default="")
+    producto_item_snapshot = models.CharField(max_length=50, null=False, default="")
+    descripcion_snapshot = models.TextField(null=False, default="")
+
+    color_nombre_snapshot = models.CharField(max_length=50, null=False, default="")
+    color_hex_snapshot = models.CharField(max_length=7, null=False, default="")
+
+    precio_unitario_snapshot = models.DecimalField(max_digits=10, decimal_places=2, null=False, default=0)
+    subtotal_linea_snapshot = models.DecimalField(max_digits=10, decimal_places=2, null=False, default=0)
+
+    imagen_principal_snapshot = models.CharField(max_length=500, null=False, default="")
+
+    # Legacy (opcional): para no romper datos viejos mientras migras
+    # Puedes borrar estos campos cuando termines el backfill y ya no los uses.
+    producto = models.ForeignKey(ProductosModel, on_delete=models.SET_NULL, null=True, blank=True)
+    color = models.CharField(max_length=50, null=True, blank=True)
+    precio_unitario_producto = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["pedido"]),
+            models.Index(fields=["variante"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"Pedido {self.pedido_id} - Variante {self.variante_id} - Cant {self.cantidad}"

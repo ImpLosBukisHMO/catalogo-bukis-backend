@@ -31,7 +31,7 @@ class DireccionesRetrieveUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = DireccionesSerializer
     lookup_field = 'id'
 
-    # Obtener info de usuario por ID.
+    # Obtener info de dirección por ID.
     def get(self, request, *args, **kwargs):
         try:
             instance = self.get_object()
@@ -41,7 +41,7 @@ class DireccionesRetrieveUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
             return Response({'error': 'Dirección no encontrada.'}, status=status.HTTP_404_NOT_FOUND)
     
 
-    # Actualizar usuario por ID.
+    # Actualizar dirección por ID.
     def put(self, request, *args, **kwargs):
         instance = self.get_object()
         serializer = self.get_serializer(instance, data=request.data)
@@ -61,3 +61,13 @@ class DireccionesRetrieveUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
         instance = self.get_object()
         instance.delete()
         return Response({'mensaje': 'Dirección eliminada con éxito.'}, status=status.HTTP_200_OK)
+    
+
+class DireccionesUsuarioView(generics.ListAPIView):
+    serializer_class = DireccionesSerializer
+
+    def get(self, request, *args, **kwargs):
+        id_usuario = self.kwargs.get("id_usuario")
+        direcciones = DireccionesModel.objects.filter(usuario=id_usuario)
+        serializer = DireccionesSerializer(direcciones, many=True)
+        return Response({'datos': serializer.data}, status=status.HTTP_200_OK)

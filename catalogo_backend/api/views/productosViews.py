@@ -1,4 +1,5 @@
 from rest_framework import generics
+from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly
 from rest_framework.exceptions import ValidationError
 from api.models import ProductosModel
 from api.serializers import ProductosSerializer, ProductoDetalleSerializer
@@ -6,6 +7,7 @@ from api.serializers import ProductosSerializer, ProductoDetalleSerializer
 
 class ProductosListCreate(generics.ListCreateAPIView):
     serializer_class = ProductosSerializer
+    permission_classes = [AllowAny]
 
     def _parse_int(self, value, field_name):
         try:
@@ -81,6 +83,7 @@ class ProductosListCreate(generics.ListCreateAPIView):
 class ProductosRetrieveUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
     queryset = ProductosModel.objects.all()
     lookup_field = "id"
+    permission_classes = [AllowAny]
 
     def get_serializer_class(self):
         if self.request.method == "GET":

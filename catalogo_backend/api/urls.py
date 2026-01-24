@@ -1,11 +1,13 @@
 from django.urls import path
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .views import (
     mockViews,
     categoriasViews,
     direccionesViews,
     pedidosViews,
     productosFavoritosViews,
-    coloresViews,
+    coloresViews, 
+    carritoViews,
 )
 
 from api.views.productosViews import ProductosListCreate, ProductosRetrieveUpdateDestroy
@@ -29,6 +31,7 @@ urlpatterns = [
     # Direcciones
     path("direcciones/", direccionesViews.DireccionesListCreate.as_view(), name="direccion-view-create"),
     path("direcciones/<int:id>/", direccionesViews.DireccionesRetrieveUpdateDestroy.as_view(), name="direccion-update"),
+    path("direcciones/usuario/<int:id_usuario>/", direccionesViews.DireccionesUsuarioView.as_view(), name="direccion-usuario"),
 
     # Pedidos
     path("pedidos/", pedidosViews.PedidosListCreate.as_view(), name="pedido-view-create"),
@@ -46,7 +49,7 @@ urlpatterns = [
     path("colores/", coloresViews.ColoresListCreateView.as_view(), name="colores-list-create"),
     path("colores/<int:id>/", coloresViews.ColoresDetailView.as_view(), name="colores-detail"),
 
-    # Producto - Variantes (antes producto-colores)
+    # Producto - Variantes
     path("producto-variantes/", ProductoVariantesListCreateView.as_view(), name="producto-variantes-list-create"),
     path("producto-variantes/<int:id>/", ProductoVariantesDetailView.as_view(), name="producto-variantes-detail"),
 
@@ -54,9 +57,18 @@ urlpatterns = [
     path("productos/", ProductosListCreate.as_view(), name="productos-list-create"),
     path("productos/<int:id>/", ProductosRetrieveUpdateDestroy.as_view(), name="producto-detail"),
 
+    # Productos - Imágenes
     path("productos-imagenes/", ProductosImagenesListCreateView.as_view(), name="productos-imagenes-list-create"),
     path("productos-imagenes/<int:id>/", ProductosImagenesDetailView.as_view(), name="productos-imagenes-detail"),
 
+    # Carrito
+    path("carrito/", carritoViews.carrito_actual, name="carrito-actual"),  # GET
+    path("carrito/items/", carritoViews.carrito_add_item, name="carrito-add-item"),  # POST
+    path("carrito/items/<int:item_id>/", carritoViews.carrito_item_detail, name="carrito-item-detail"),  # PATCH/DELETE
+    path("carrito/checkout/", carritoViews.carrito_checkout, name="carrito-checkout"),  # POST
+
+    path("auth/login/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
 ]
 
 urlpatterns += usuariosURLs.urlsUsuarios

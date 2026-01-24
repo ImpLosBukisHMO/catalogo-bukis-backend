@@ -1,4 +1,5 @@
 from rest_framework import generics, status
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from django.db import IntegrityError, transaction
 
@@ -8,8 +9,12 @@ from api.serializers import ProductosFavoritosSerializer
 
 class ProductosFavoritosListCreate(generics.ListCreateAPIView):
     serializer_class = ProductosFavoritosSerializer
+    permission_classes = [AllowAny]
 
     def get_queryset(self):
+        if self.request.user.is_anonymous:
+            return ProductosFavoritosModel.objects.none()
+
         qs = ProductosFavoritosModel.objects.all()
 
         usuario = self.request.query_params.get("usuario")

@@ -1,5 +1,6 @@
 from django.http import Http404
 from rest_framework import generics, status
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 from api.models import CategoriasModel
 from ..serializers import CategoriasSerializer
@@ -12,6 +13,7 @@ Views de categorías
 class CategoriasListCreate(generics.ListCreateAPIView):
     queryset = CategoriasModel.objects.all()
     serializer_class = CategoriasSerializer
+    permission_classes = [IsAuthenticatedOrReadOnly]
 
     def post(self, request, *args, **kwargs):
         serializer = CategoriasSerializer(data=request.data)
@@ -29,6 +31,7 @@ class CategoriasListCreate(generics.ListCreateAPIView):
 class CategoriasRetrieveUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
     queryset = CategoriasModel.objects.all()
     serializer_class = CategoriasSerializer
+    permission_classes = [IsAuthenticatedOrReadOnly]
     lookup_field = 'id'
 
     # Obtener info de usuario por ID.
