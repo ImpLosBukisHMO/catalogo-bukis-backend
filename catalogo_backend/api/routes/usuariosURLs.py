@@ -9,5 +9,5 @@ urlsUsuarios = [
     path('logout/', apis.APICerrarSesion.as_view(), name='logout'),
     path('mi_usuario/', apis.APIUsuario.as_view(), name='mi-usuario'),
     path('usuarios/', usuariosViews.UsuariosListCreate.as_view(), name='usuario-view-create'),
-    path('usuarios/<int:id>', usuariosViews.UsuariosRetrieveUpdateDestroy.as_view(), name='usuario-update')
+    path('usuarios/<int:id>/', usuariosViews.UsuariosRetrieveUpdateDestroy.as_view(), name='usuario-update')
 ]
