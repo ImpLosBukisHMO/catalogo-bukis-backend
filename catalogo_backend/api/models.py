@@ -79,7 +79,7 @@ class UsuariosModel(AbstractUser):
     apellido = models.CharField(max_length=100, null=False, default="", verbose_name="Apellido(s)")
     correo = models.EmailField(unique=True, verbose_name="Correo electrónico")
     telefono = models.CharField(max_length=30, null=False, verbose_name="Teléfono")
-    password = models.CharField(max_length=255, null=False, verbose_name="Contraseña")
+    password = models.CharField(max_length=255, null=False, blank=True, verbose_name="Contraseña")
     is_active = models.BooleanField(default=True)
     is_admin = models.BooleanField(default=False)
     is_superuser = models.BooleanField(default=False)

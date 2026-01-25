@@ -9,11 +9,27 @@ from . import services
 
 class UsuariosSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(read_only=True)
-    password = serializers.CharField(write_only=True)
+    password = serializers.CharField(write_only=True, required=False)
 
     def to_internal_value(self, data):
         datos = super().to_internal_value(data)
+        # Si estamos editando (existe instance), devolvemos dict para que update funcione estándar
+        if self.instance is not None:
+            return datos
         return services.DataClassUsuarios(**datos)
+
+    def update(self, instance, validated_data):
+        # validated_data es un diccionario aquí
+        instance.nombre = validated_data.get('nombre', instance.nombre)
+        instance.apellido = validated_data.get('apellido', instance.apellido)
+        instance.correo = validated_data.get('correo', instance.correo)
+        instance.telefono = validated_data.get('telefono', instance.telefono)
+
+        if 'password' in validated_data:
+            instance.set_password(validated_data['password'])
+
+        instance.save()
+        return instance
 
     class Meta:
         model = UsuariosModel
