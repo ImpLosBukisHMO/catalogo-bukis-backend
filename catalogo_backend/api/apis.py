@@ -3,6 +3,7 @@ from rest_framework import views, response, exceptions, permissions, status
 from . import serializers
 from . import services
 from . import authentication
+from rest_framework_simplejwt.tokens import RefreshToken
 
 # Registrarse.
 class APIRegistro(views.APIView):
@@ -28,15 +29,15 @@ class APIIniciarSesion(views.APIView):
         if not usuario.check_password(raw_password=contrasenaUsuario):
             raise exceptions.AuthenticationFailed('Contraseña incorrecta.')
         
-        token = services.obtenerToken(usuario.id)
-        res = response.Response()
+        refresh = RefreshToken.for_user(usuario)
+        token = str(refresh.access_token)
+        res = response.Response({"token": token})
         res.set_cookie(key='jwt', value=token, httponly=True)
         return res
 
 
 # Autenticación de usuario. Solo la puede utilizar un usuario autenticado.
 class APIUsuario(views.APIView):
-    authentication_classes = (authentication.AutenticacionUsuario,)
     permission_classes = (permissions.IsAuthenticated,)
 
     def get(self, request):
@@ -47,7 +48,6 @@ class APIUsuario(views.APIView):
 
 # Cerrar sesión del usuario actual.
 class APICerrarSesion(views.APIView):
-    authentication_classes = (authentication.AutenticacionUsuario,)
     permission_classes = (permissions.IsAuthenticated,)
 
     def post(self, request):

@@ -1,16 +1,17 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+
 from .views import (
     mockViews,
     categoriasViews,
     direccionesViews,
     pedidosViews,
     productosFavoritosViews,
-    coloresViews, 
+    coloresViews,
     carritoViews,
 )
-from api.views.workerViews import WorkerVariantListView 
-from api.views.workerViews import WorkerPedidoListView
+
+from api.views.workerViews import WorkerVariantListView, WorkerPedidoListView
 from api.views.usuariosViews import MiUsuarioView
 
 from api.views.productosViews import ProductosListCreate, ProductosRetrieveUpdateDestroy
@@ -22,11 +23,14 @@ from .views.productosImagenesViews import (
     ProductosImagenesListCreateView,
     ProductosImagenesDetailView,
 )
+
 from .routes import usuariosURLs
+
 
 urlpatterns = [
     path("", mockViews.getMockData),
 
+    # Perfil (quién soy)
     path("mi_usuario/", MiUsuarioView.as_view(), name="mi-usuario"),
 
     # Categorías
@@ -36,6 +40,7 @@ urlpatterns = [
     # Direcciones
     path("direcciones/", direccionesViews.DireccionesListCreate.as_view(), name="direccion-view-create"),
     path("direcciones/<int:id>/", direccionesViews.DireccionesRetrieveUpdateDestroy.as_view(), name="direccion-update"),
+    path("direcciones/usuario/<int:id_usuario>/", direccionesViews.DireccionesUsuarioView.as_view(), name="direccion-usuario"),
 
     # Pedidos
     path("pedidos/", pedidosViews.PedidosListCreate.as_view(), name="pedido-view-create"),
@@ -71,12 +76,14 @@ urlpatterns = [
     path("carrito/items/<int:item_id>/", carritoViews.carrito_item_detail, name="carrito-item-detail"),  # PATCH/DELETE
     path("carrito/checkout/", carritoViews.carrito_checkout, name="carrito-checkout"),  # POST
 
+    # JWT
     path("auth/login/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
 
+    # Worker
     path("worker/variants/", WorkerVariantListView.as_view(), name="worker-variants"),
     path("worker/pedidos/", WorkerPedidoListView.as_view(), name="worker-pedidos"),
-    
 ]
 
+# Signup/Login/Logout legacy + usuarios CRUD (según su archivo routes/usuariosURLs.py)
 urlpatterns += usuariosURLs.urlsUsuarios

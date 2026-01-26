@@ -22,14 +22,16 @@ from rest_framework.decorators import api_view
 from django.conf import settings
 from django.conf.urls.static import static
 
-@api_view(['GET'])
+
+@api_view(["GET"])
 def view_root(request):
     return Response("API Root", status=status.HTTP_200_OK)
-    
+
+
 urlpatterns = [
-    path('', view_root),
-    path('admin/', admin.site.urls),
-    path('api/', include('api.urls')),
+    path("", view_root),
+    path("admin/", admin.site.urls),
+    path("api/", include("api.urls")),
 ]
 
 if settings.DEBUG:

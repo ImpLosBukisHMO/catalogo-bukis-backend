@@ -8,10 +8,10 @@ from django.conf import settings
 #Usuarios
 @dataclasses.dataclass
 class DataClassUsuarios:
-    nombre: str
-    apellido: str
-    correo: str
-    telefono: str
+    nombre: str = ""
+    apellido: str = ""
+    correo: str = ""
+    telefono: str = ""
     password: str = None
     id: int = None
 
