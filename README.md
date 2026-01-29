@@ -5,7 +5,8 @@ Primero crea un entorno virtual (venv) y actívalo.
 
 ```
 py -m venv venv
-source venv/Scripts/activate --> Windows
+venv/Scripts/activate.bat --> Windows (CMD)
+venv/Scripts/activate.ps1 --> Windows (PowerShell)
 source venv/bin/activate     --> Linux/MacOS
 ```
 
