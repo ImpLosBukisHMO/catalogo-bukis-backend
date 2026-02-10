@@ -17,19 +17,21 @@ from .models import (
 from . import services
 
 
+# =========================
+# Usuarios
+# =========================
+
 class UsuariosSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(read_only=True)
     password = serializers.CharField(write_only=True, required=False)
 
     def to_internal_value(self, data):
         datos = super().to_internal_value(data)
-        # Si estamos editando (existe instance), devolvemos dict para que update funcione estándar
         if self.instance is not None:
             return datos
         return services.DataClassUsuarios(**datos)
 
     def update(self, instance, validated_data):
-        # validated_data es un diccionario aquí
         instance.nombre = validated_data.get("nombre", instance.nombre)
         instance.apellido = validated_data.get("apellido", instance.apellido)
         instance.correo = validated_data.get("correo", instance.correo)
@@ -43,8 +45,12 @@ class UsuariosSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UsuariosModel
-        fields = ["nombre", "apellido", "correo", "telefono", "password", "id"]
+        fields = ["id", "nombre", "apellido", "correo", "telefono", "password"]
 
+
+# =========================
+# Catálogos
+# =========================
 
 class CategoriasSerializer(serializers.ModelSerializer):
     class Meta:
@@ -58,7 +64,22 @@ class ColorSerializer(serializers.ModelSerializer):
         fields = ["id", "nombre", "hex", "created_at", "updated_at"]
 
 
+class ColorMiniSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ColorModel
+        fields = ["id", "nombre", "hex"]
+
+
+# =========================
+# Productos
+# =========================
+
 class ProductosSerializer(serializers.ModelSerializer):
+    categorias = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=CategoriasModel.objects.all()
+    )
+
     class Meta:
         model = ProductosModel
         fields = [
@@ -71,7 +92,7 @@ class ProductosSerializer(serializers.ModelSerializer):
             "peso",
             "medidas",
             "capacidad",
-            "categoria",
+            "categorias",
             "disponible",
             "created_at",
             "updated_at",
@@ -79,16 +100,16 @@ class ProductosSerializer(serializers.ModelSerializer):
 
 
 class ProductoMiniSerializer(serializers.ModelSerializer):
+    categorias = CategoriasSerializer(many=True, read_only=True)
+
     class Meta:
         model = ProductosModel
-        fields = ["id", "nombre", "imagen", "precio", "categoria"]
+        fields = ["id", "nombre", "imagen", "precio", "categorias"]
 
 
-class ColorMiniSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ColorModel
-        fields = ["id", "nombre", "hex"]
-
+# =========================
+# Imágenes
+# =========================
 
 class ProductosImagenesSerializer(serializers.ModelSerializer):
     producto = serializers.IntegerField(source="producto_id", read_only=True)
@@ -122,6 +143,10 @@ class ProductosImagenesSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+
+# =========================
+# Variantes
+# =========================
 
 class ProductoVariantesSerializer(serializers.ModelSerializer):
     producto = ProductoMiniSerializer(read_only=True)
@@ -171,24 +196,34 @@ class ProductoVariantesEnProductoSerializer(serializers.ModelSerializer):
         return obj.activo and obj.stock > 0
 
 
+# =========================
+# Producto detalle
+# =========================
+
 class ProductoDetalleSerializer(ProductosSerializer):
     variantes = serializers.SerializerMethodField()
-
-    def get_variantes(self, obj):
-        qs = (
-            ProductoVariantesModel.objects.filter(producto=obj).select_related("color")
-        )
-        return ProductoVariantesEnProductoSerializer(qs, many=True).data
 
     class Meta(ProductosSerializer.Meta):
         fields = ProductosSerializer.Meta.fields + ["variantes"]
 
+    def get_variantes(self, obj):
+        qs = ProductoVariantesModel.objects.filter(producto=obj).select_related("color")
+        return ProductoVariantesEnProductoSerializer(qs, many=True).data
+
+
+# =========================
+# Favoritos
+# =========================
 
 class ProductosFavoritosSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductosFavoritosModel
         fields = "__all__"
 
+
+# =========================
+# Pedidos
+# =========================
 
 class PedidosSerializer(serializers.ModelSerializer):
     class Meta:
@@ -202,11 +237,19 @@ class PedidoProductosSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+# =========================
+# Direcciones
+# =========================
+
 class DireccionesSerializer(serializers.ModelSerializer):
     class Meta:
         model = DireccionesModel
         fields = "__all__"
 
+
+# =========================
+# Carrito
+# =========================
 
 class CarritoItemCreateSerializer(serializers.Serializer):
     variante_id = serializers.IntegerField()
@@ -218,7 +261,6 @@ class CarritoItemUpdateSerializer(serializers.Serializer):
 
 
 class CarritoItemReadSerializer(serializers.ModelSerializer):
-    # Campos “bonitos” para debug rápido
     producto_id = serializers.IntegerField(source="variante.producto_id", read_only=True)
     producto_nombre = serializers.CharField(source="variante.producto.nombre", read_only=True)
     color_nombre = serializers.CharField(source="variante.color.nombre", read_only=True)
@@ -248,19 +290,19 @@ class CarritoItemReadSerializer(serializers.ModelSerializer):
         ]
 
     def get_subtotal_linea(self, obj):
-        precio = obj.variante.producto.precio
-        return precio * obj.cantidad
+        return obj.variante.producto.precio * obj.cantidad
 
     def get_imagen(self, obj):
-        # prioridad: imagen principal de variante, luego primera, luego imagen del producto
         img = (
-            ProductosImagenesModel.objects.filter(variante=obj.variante, es_principal=True)
+            ProductosImagenesModel.objects
+            .filter(variante=obj.variante, es_principal=True)
             .order_by("orden", "id")
             .first()
         )
         if not img:
             img = (
-                ProductosImagenesModel.objects.filter(variante=obj.variante)
+                ProductosImagenesModel.objects
+                .filter(variante=obj.variante)
                 .order_by("orden", "id")
                 .first()
             )
@@ -280,134 +322,49 @@ class CarritoReadSerializer(serializers.ModelSerializer):
         fields = ["id", "estado", "subtotal", "items"]
 
     def get_items(self, obj):
-        qs = (
-            obj.items.select_related("variante__producto", "variante__color")
-            .all()
-            .order_by("id")
-        )
+        qs = obj.items.select_related(
+            "variante__producto",
+            "variante__color"
+        ).all()
         return CarritoItemReadSerializer(qs, many=True).data
 
     def get_subtotal(self, obj):
         total = 0
-        qs = obj.items.select_related("variante__producto").all()
-        for it in qs:
+        for it in obj.items.select_related("variante__producto").all():
             total += it.variante.producto.precio * it.cantidad
         return total
 
 
-class WorkerVariantSerializer(serializers.Serializer):
-    variant_id = serializers.IntegerField()
-
-    producto = serializers.SerializerMethodField()
-    color = ColorMiniSerializer()
-
-    stock = serializers.IntegerField()
-    disponible = serializers.BooleanField()
-
-    imagen_principal = serializers.SerializerMethodField()
-
-    def get_producto(self, obj):
-        # obj normalmente viene de values()/annotate o dict armado en workerViews
-        if isinstance(obj, dict):
-            return {
-                "id": obj.get("producto_id"),
-                "nombre": obj.get("producto_nombre"),
-                "item": obj.get("producto_item"),
-                "precio": obj.get("producto_precio"),
-            }
-
-        p = getattr(obj, "producto", None)
-        if not p:
-            return None
-
-        return {
-            "id": p.id,
-            "nombre": p.nombre,
-            "item": p.item,
-            "precio": p.precio,
-        }
-
-    def get_imagen_principal(self, obj):
-        # Si ya viene resuelta desde la vista, úsala
-        if isinstance(obj, dict) and obj.get("imagen_principal"):
-            return obj["imagen_principal"]
-
-        # fallback: buscar en galería por variante
-        variant_id = obj.get("variant_id") if isinstance(obj, dict) else getattr(obj, "id", None)
-        if not variant_id:
-            return None
-
-        img = (
-            ProductosImagenesModel.objects.filter(variante_id=variant_id, es_principal=True)
-            .order_by("orden", "id")
-            .first()
-        )
-        if not img:
-            img = (
-                ProductosImagenesModel.objects.filter(variante_id=variant_id)
-                .order_by("orden", "id")
-                .first()
-            )
-        if img:
-            return img.imagen.url if hasattr(img.imagen, "url") else str(img.imagen)
-
-        return None
+# =========================
+# Worker (sin categoria FK)
+# =========================
 
 class WorkerVariantSerializer(serializers.Serializer):
     variant_id = serializers.IntegerField()
-
-    producto = serializers.SerializerMethodField()
-    color = ColorMiniSerializer()
-
     stock = serializers.IntegerField()
     disponible = serializers.BooleanField()
-
+    color = ColorMiniSerializer()
+    producto = serializers.SerializerMethodField()
     imagen_principal = serializers.SerializerMethodField()
 
     def get_producto(self, obj):
-        # obj puede venir como dict desde values() o como modelo (depende tu view)
-        if isinstance(obj, dict):
-            return {
-                "id": obj.get("producto_id"),
-                "nombre": obj.get("producto_nombre"),
-                "imagen": obj.get("producto_imagen"),
-                "precio": obj.get("producto_precio"),
-                "categoria": obj.get("producto_categoria_id"),
-            }
         p = obj.producto
         return {
             "id": p.id,
             "nombre": p.nombre,
-            "imagen": p.imagen.url if getattr(p, "imagen", None) and hasattr(p.imagen, "url") else str(getattr(p, "imagen", "")),
             "precio": p.precio,
-            "categoria": p.categoria_id,
+            "categorias": [c.id for c in p.categorias.all()],
         }
 
     def get_imagen_principal(self, obj):
-        # si viene dict y ya trae imagen resuelta
-        if isinstance(obj, dict) and obj.get("imagen_principal"):
-            return obj["imagen_principal"]
-
-        # si viene modelo
-        v = obj if not isinstance(obj, dict) else None
-        if v is None:
-            return ""
-
         img = (
             ProductosImagenesModel.objects
-            .filter(variante=v, es_principal=True)
+            .filter(variante=obj, es_principal=True)
             .order_by("orden", "id")
             .first()
         )
-        if not img:
-            img = (
-                ProductosImagenesModel.objects
-                .filter(variante=v)
-                .order_by("orden", "id")
-                .first()
-            )
         if img:
             return img.imagen.url if hasattr(img.imagen, "url") else str(img.imagen)
 
-        p = v.producto
+        p = obj.producto
         return p.imagen.url if hasattr(p.imagen, "url") else str(p.imagen)
