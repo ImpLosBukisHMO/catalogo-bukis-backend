@@ -293,23 +293,20 @@ class CarritoItemReadSerializer(serializers.ModelSerializer):
         return obj.variante.producto.precio * obj.cantidad
 
     def get_imagen(self, obj):
+        p = obj.variante.producto
+
+        # Imagen principal del producto (tabla productos_imagenes)
         img = (
             ProductosImagenesModel.objects
-            .filter(variante=obj.variante, es_principal=True)
+            .filter(producto=p, es_principal=True)
             .order_by("orden", "id")
             .first()
         )
-        if not img:
-            img = (
-                ProductosImagenesModel.objects
-                .filter(variante=obj.variante)
-                .order_by("orden", "id")
-                .first()
-            )
+
         if img:
             return img.imagen.url if hasattr(img.imagen, "url") else str(img.imagen)
 
-        p = obj.variante.producto
+        # Fallback: imagen directa del producto
         return p.imagen.url if hasattr(p.imagen, "url") else str(p.imagen)
 
 
