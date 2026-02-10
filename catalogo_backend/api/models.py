@@ -125,7 +125,11 @@ class ProductosModel(models.Model):
     medidas = models.TextField(null=False)
     capacidad = models.CharField(max_length=50, null=True, blank=True)
     disponible = models.BooleanField(default=True)
-    categoria = models.ForeignKey(CategoriasModel, on_delete=models.CASCADE)
+    categorias = models.ManyToManyField(
+        CategoriasModel,
+        related_name="productos",
+        blank=True
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

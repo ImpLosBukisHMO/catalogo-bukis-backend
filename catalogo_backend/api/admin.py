@@ -17,13 +17,19 @@ class AdminPedidoProductos(admin.ModelAdmin):
     list_display = ("id", "pedido", "producto", "cantidad", "color", "precio_unitario_producto")
 
 
-# ---- NUEVOS (para que aparezcan en Admin) ----
-
 class AdminColores(admin.ModelAdmin):
     list_display = ("id", "nombre", "hex")
 
 class AdminProductos(admin.ModelAdmin):
-    list_display = ("id", "nombre", "item", "precio", "categoria")
+    list_display = ("id", "nombre", "item", "precio", "mostrar_categorias")
+
+    def mostrar_categorias(self, obj):
+        return ", ".join(
+            categoria.nombre for categoria in obj.categorias.all()
+        )
+
+    mostrar_categorias.short_description = "Categorías"
+
 
 class AdminProductoVariantes(admin.ModelAdmin):
     list_display = ("id", "producto", "color", "stock", "activo")
