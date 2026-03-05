@@ -191,7 +191,7 @@ def carrito_checkout(request):
                 variante=v,
                 cantidad=it.cantidad,
                 producto_nombre_snapshot=p.nombre,
-                producto_item_snapshot=p.item,
+                producto_item_snapshot=v.item,
                 descripcion_snapshot=p.descripcion or "",
                 color_nombre_snapshot=c.nombre,
                 color_hex_snapshot=c.hex,

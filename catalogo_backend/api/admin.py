@@ -21,7 +21,7 @@ class AdminColores(admin.ModelAdmin):
     list_display = ("id", "nombre", "hex")
 
 class AdminProductos(admin.ModelAdmin):
-    list_display = ("id", "nombre", "item", "precio", "mostrar_categorias")
+    list_display = ("id", "nombre", "precio", "mostrar_categorias")
 
     def mostrar_categorias(self, obj):
         return ", ".join(

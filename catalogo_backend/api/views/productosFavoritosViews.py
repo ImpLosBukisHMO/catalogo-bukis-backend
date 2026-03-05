@@ -1,5 +1,5 @@
 from rest_framework import generics, status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.db import IntegrityError, transaction
 
@@ -9,35 +9,35 @@ from api.serializers import ProductosFavoritosSerializer
 
 class ProductosFavoritosListCreate(generics.ListCreateAPIView):
     serializer_class = ProductosFavoritosSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        if self.request.user.is_anonymous:
-            return ProductosFavoritosModel.objects.none()
-
-        qs = ProductosFavoritosModel.objects.all()
-
-        usuario = self.request.query_params.get("usuario")
-        if usuario:
-            qs = qs.filter(usuario_id=usuario)
-
-        return qs
+        return (
+            ProductosFavoritosModel.objects
+            .filter(usuario=self.request.user)
+            .select_related(
+                "variante__producto",
+                "variante__color",
+            )
+            .prefetch_related("variante__imagenes")
+        )
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        usuario = serializer.validated_data["usuario"]
-        producto = serializer.validated_data["producto"]
+        variante = serializer.validated_data["variante"]
 
         try:
             with transaction.atomic():
                 obj, created = ProductosFavoritosModel.objects.get_or_create(
-                    usuario=usuario,
-                    producto=producto,
+                    usuario=request.user,
+                    variante=variante,
                 )
         except IntegrityError:
-            obj = ProductosFavoritosModel.objects.get(usuario=usuario, producto=producto)
+            obj = ProductosFavoritosModel.objects.get(
+                usuario=request.user, variante=variante
+            )
             created = False
 
         out = self.get_serializer(obj).data
@@ -46,6 +46,9 @@ class ProductosFavoritosListCreate(generics.ListCreateAPIView):
 
 
 class ProductosFavoritosRetrieveUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
-    queryset = ProductosFavoritosModel.objects.all()
     serializer_class = ProductosFavoritosSerializer
+    permission_classes = [IsAuthenticated]
     lookup_field = "id"
+
+    def get_queryset(self):
+        return ProductosFavoritosModel.objects.filter(usuario=self.request.user)

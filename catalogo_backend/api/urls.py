@@ -11,7 +11,16 @@ from .views import (
     carritoViews,
 )
 
-from api.views.workerViews import WorkerVariantListView, WorkerPedidoListView
+from api.views.workerViews import (
+    WorkerVariantListView,
+    WorkerPedidoListView,
+    WorkerPedidoDetailView,
+    WorkerCambiarEstadoView,
+    WorkerProductoListCreateView,
+    WorkerProductoUpdateView,
+    WorkerVarianteCreateView,
+    WorkerImagenCreateView,
+)
 from api.views.usuariosViews import MiUsuarioView
 
 from api.views.productosViews import ProductosListCreate, ProductosRetrieveUpdateDestroy
@@ -45,6 +54,10 @@ urlpatterns = [
     # Pedidos
     path("pedidos/", pedidosViews.PedidosListCreate.as_view(), name="pedido-view-create"),
     path("pedidos/<int:id>/", pedidosViews.PedidosRetrieveUpdateDestroy.as_view(), name="pedido-update"),
+
+    # Mis pedidos (cliente autenticado)
+    path("mis-pedidos/", pedidosViews.MisPedidosListView.as_view(), name="mis-pedidos"),
+    path("mis-pedidos/<int:id>/", pedidosViews.MiPedidoDetalleView.as_view(), name="mi-pedido-detalle"),
 
     # Pedido - Productos
     path("pedido-productos/", pedidosViews.PedidoProductosListCreate.as_view(), name="pedido-producto-view-create"),
@@ -80,9 +93,19 @@ urlpatterns = [
     path("auth/login/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
 
-    # Worker
+    # Worker - variantes (existente)
     path("worker/variants/", WorkerVariantListView.as_view(), name="worker-variants"),
+
+    # Worker - pedidos
     path("worker/pedidos/", WorkerPedidoListView.as_view(), name="worker-pedidos"),
+    path("worker/pedidos/<int:pedido_id>/", WorkerPedidoDetailView.as_view(), name="worker-pedido-detail"),
+    path("worker/pedidos/<int:pedido_id>/cambiar-estado/", WorkerCambiarEstadoView.as_view(), name="worker-cambiar-estado"),
+
+    # Worker - productos propios
+    path("worker/productos/", WorkerProductoListCreateView.as_view(), name="worker-productos"),
+    path("worker/productos/<int:producto_id>/", WorkerProductoUpdateView.as_view(), name="worker-producto-detail"),
+    path("worker/productos/<int:producto_id>/variantes/", WorkerVarianteCreateView.as_view(), name="worker-variante-create"),
+    path("worker/productos/<int:producto_id>/imagenes/", WorkerImagenCreateView.as_view(), name="worker-imagen-create"),
 ]
 
 # Signup/Login/Logout legacy + usuarios CRUD (según su archivo routes/usuariosURLs.py)

@@ -1,7 +1,13 @@
 from django.http import Http404
 from rest_framework import generics, status
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from ..serializers import PedidosSerializer, PedidoProductosSerializer
+from ..serializers import (
+    PedidosSerializer,
+    PedidoProductosSerializer,
+    ClientePedidoSerializer,
+    ClientePedidoListSerializer,
+)
 from api.models import PedidosModel, PedidoProductosModel
 
 
@@ -112,3 +118,33 @@ class PedidoProductosRetrieveUpdateDestroy(generics.RetrieveUpdateDestroyAPIView
         return Response({'mensaje': 'Producto eliminado del pedido con éxito.'}, status=status.HTTP_204_NO_CONTENT)
 
 
+# -------------------------------------------------------
+# Vistas para el cliente: sus propios pedidos
+# -------------------------------------------------------
+
+class MisPedidosListView(generics.ListAPIView):
+    """GET /api/mis-pedidos/ — lista los pedidos del usuario autenticado."""
+    serializer_class = ClientePedidoListSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return (
+            PedidosModel.objects
+            .filter(cliente=self.request.user)
+            .prefetch_related("items")
+            .order_by("-created_at")
+        )
+
+
+class MiPedidoDetalleView(generics.RetrieveAPIView):
+    """GET /api/mis-pedidos/<id>/ — detalle de un pedido del usuario autenticado."""
+    serializer_class = ClientePedidoSerializer
+    permission_classes = [IsAuthenticated]
+    lookup_field = "id"
+
+    def get_queryset(self):
+        return (
+            PedidosModel.objects
+            .filter(cliente=self.request.user)
+            .prefetch_related("items")
+        )

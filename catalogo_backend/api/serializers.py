@@ -85,7 +85,6 @@ class ProductosSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "nombre",
-            "item",
             "imagen",
             "descripcion",
             "precio",
@@ -215,10 +214,50 @@ class ProductoDetalleSerializer(ProductosSerializer):
 # Favoritos
 # =========================
 
+class FavoritoVarianteSerializer(serializers.ModelSerializer):
+    nombre_producto = serializers.CharField(source="producto.nombre", read_only=True)
+    precio = serializers.DecimalField(
+        source="producto.precio", max_digits=10, decimal_places=2, read_only=True
+    )
+    color = ColorMiniSerializer(read_only=True)
+    imagen = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProductoVariantesModel
+        fields = ["id", "item", "stock", "activo", "nombre_producto", "precio", "color", "imagen"]
+
+    def get_imagen(self, obj):
+        img = (
+            ProductosImagenesModel.objects
+            .filter(variante=obj, es_principal=True)
+            .order_by("orden", "id")
+            .first()
+        )
+        if img:
+            return img.imagen.url if hasattr(img.imagen, "url") else str(img.imagen)
+        img = (
+            ProductosImagenesModel.objects
+            .filter(producto=obj.producto, es_principal=True)
+            .order_by("orden", "id")
+            .first()
+        )
+        if img:
+            return img.imagen.url if hasattr(img.imagen, "url") else str(img.imagen)
+        p = obj.producto
+        return p.imagen.url if hasattr(p.imagen, "url") else str(p.imagen)
+
+
 class ProductosFavoritosSerializer(serializers.ModelSerializer):
+    variante = FavoritoVarianteSerializer(read_only=True)
+    variante_id = serializers.PrimaryKeyRelatedField(
+        source="variante",
+        queryset=ProductoVariantesModel.objects.all(),
+        write_only=True,
+    )
+
     class Meta:
         model = ProductosFavoritosModel
-        fields = "__all__"
+        fields = ["id", "variante", "variante_id"]
 
 
 # =========================
@@ -235,6 +274,62 @@ class PedidoProductosSerializer(serializers.ModelSerializer):
     class Meta:
         model = PedidoProductosModel
         fields = "__all__"
+
+
+# Serializers para el cliente (mis pedidos)
+
+class ClientePedidoItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PedidoProductosModel
+        fields = [
+            "id",
+            "cantidad",
+            "producto_nombre_snapshot",
+            "producto_item_snapshot",
+            "color_nombre_snapshot",
+            "color_hex_snapshot",
+            "precio_unitario_snapshot",
+            "subtotal_linea_snapshot",
+            "imagen_principal_snapshot",
+        ]
+
+
+class ClientePedidoSerializer(serializers.ModelSerializer):
+    items = ClientePedidoItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = PedidosModel
+        fields = [
+            "id",
+            "public_id",
+            "estado",
+            "precio_total",
+            "subtotal_snapshot",
+            "nota_cliente",
+            "nota_worker",
+            "denegado_razon",
+            "aprobado_eta",
+            "created_at",
+            "items",
+        ]
+
+
+class ClientePedidoListSerializer(serializers.ModelSerializer):
+    items_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PedidosModel
+        fields = [
+            "id",
+            "public_id",
+            "estado",
+            "precio_total",
+            "created_at",
+            "items_count",
+        ]
+
+    def get_items_count(self, obj):
+        return obj.items.count()
 
 
 # =========================

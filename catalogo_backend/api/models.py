@@ -117,7 +117,6 @@ class CategoriasModel(models.Model):
 # Productos.
 class ProductosModel(models.Model):
     nombre = models.CharField(max_length=100, null=False)
-    item = models.CharField(max_length=50, null=False)
     imagen = models.ImageField(upload_to=get_product_image_path, null=False)
     descripcion = models.TextField(default="")
     precio = models.DecimalField(max_digits=10, decimal_places=2, null=False)
@@ -129,6 +128,15 @@ class ProductosModel(models.Model):
         CategoriasModel,
         related_name="productos",
         blank=True
+    )
+    # Worker Panel: worker dueño del producto (null = producto de admin/sin dueño)
+    worker = models.ForeignKey(
+        "UsuariosModel",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="productos_propios",
+        limit_choices_to={"is_staff": True},
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -165,6 +173,7 @@ class ProductoVariantesModel(models.Model):
         related_name="color_productos",
     )
 
+    item = models.CharField(max_length=50, null=False, default="")
     stock = models.PositiveIntegerField(default=0)
     activo = models.BooleanField(default=True)
 
@@ -217,7 +226,10 @@ class ProductosImagenesModel(models.Model):
 # Productos favoritos.
 class ProductosFavoritosModel(models.Model):
     usuario = models.ForeignKey(UsuariosModel, on_delete=models.CASCADE)
-    producto = models.ForeignKey(ProductosModel, on_delete=models.CASCADE)
+    variante = models.ForeignKey(ProductoVariantesModel, on_delete=models.CASCADE)
+
+    class Meta:
+        unique_together = ("usuario", "variante")
 
 
 # Direcciones de los usuarios.
@@ -287,8 +299,20 @@ class PedidosModel(models.Model):
         APROBADO = "APPROVED", "Aprobado"
         DENEGADO = "DENIED", "Denegado"
         LISTO = "READY", "Listo"
+        ENVIADO = "SHIPPED", "Enviado"
         COMPLETADO = "COMPLETED", "Completado"
         CANCELADO = "CANCELED", "Cancelado"
+
+    # Transiciones válidas de estado (worker panel)
+    TRANSICIONES_VALIDAS = {
+        "PENDING": ["APPROVED", "DENIED"],
+        "APPROVED": ["READY"],
+        "READY": ["SHIPPED"],
+        "SHIPPED": ["COMPLETED"],
+        "DENIED": [],
+        "COMPLETED": [],
+        "CANCELED": [],
+    }
 
     cliente = models.ForeignKey(UsuariosModel, on_delete=models.CASCADE, related_name="pedidos")
 
