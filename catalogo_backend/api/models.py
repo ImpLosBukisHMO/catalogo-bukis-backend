@@ -80,10 +80,12 @@ class UsuariosModel(AbstractUser):
     correo = models.EmailField(unique=True, verbose_name="Correo electrónico")
     telefono = models.CharField(max_length=30, null=False, verbose_name="Teléfono")
     password = models.CharField(max_length=255, null=False, blank=True, verbose_name="Contraseña")
+
     is_active = models.BooleanField(default=True)
     is_admin = models.BooleanField(default=False)
     is_superuser = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -115,7 +117,6 @@ class CategoriasModel(models.Model):
 # Productos.
 class ProductosModel(models.Model):
     nombre = models.CharField(max_length=100, null=False)
-    item = models.CharField(max_length=50, null=False)
     imagen = models.ImageField(upload_to=get_product_image_path, null=False)
     descripcion = models.TextField(default="")
     precio = models.DecimalField(max_digits=10, decimal_places=2, null=False)
@@ -123,7 +124,20 @@ class ProductosModel(models.Model):
     medidas = models.TextField(null=False)
     capacidad = models.CharField(max_length=50, null=True, blank=True)
     disponible = models.BooleanField(default=True)
-    categoria = models.ForeignKey(CategoriasModel, on_delete=models.CASCADE)
+    categorias = models.ManyToManyField(
+        CategoriasModel,
+        related_name="productos",
+        blank=True
+    )
+    # Worker Panel: worker dueño del producto (null = producto de admin/sin dueño)
+    worker = models.ForeignKey(
+        "UsuariosModel",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="productos_propios",
+        limit_choices_to={"is_staff": True},
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -159,11 +173,9 @@ class ProductoVariantesModel(models.Model):
         related_name="color_productos",
     )
 
+    item = models.CharField(max_length=50, null=False, default="")
     stock = models.PositiveIntegerField(default=0)
     activo = models.BooleanField(default=True)
-
-    # Opcional a futuro: precio específico por variante
-    # precio_override = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -214,7 +226,10 @@ class ProductosImagenesModel(models.Model):
 # Productos favoritos.
 class ProductosFavoritosModel(models.Model):
     usuario = models.ForeignKey(UsuariosModel, on_delete=models.CASCADE)
-    producto = models.ForeignKey(ProductosModel, on_delete=models.CASCADE)
+    variante = models.ForeignKey(ProductoVariantesModel, on_delete=models.CASCADE)
+
+    class Meta:
+        unique_together = ("usuario", "variante")
 
 
 # Direcciones de los usuarios.
@@ -284,8 +299,20 @@ class PedidosModel(models.Model):
         APROBADO = "APPROVED", "Aprobado"
         DENEGADO = "DENIED", "Denegado"
         LISTO = "READY", "Listo"
+        ENVIADO = "SHIPPED", "Enviado"
         COMPLETADO = "COMPLETED", "Completado"
         CANCELADO = "CANCELED", "Cancelado"
+
+    # Transiciones válidas de estado (worker panel)
+    TRANSICIONES_VALIDAS = {
+        "PENDING": ["APPROVED", "DENIED"],
+        "APPROVED": ["READY"],
+        "READY": ["SHIPPED"],
+        "SHIPPED": ["COMPLETED"],
+        "DENIED": [],
+        "COMPLETED": [],
+        "CANCELED": [],
+    }
 
     cliente = models.ForeignKey(UsuariosModel, on_delete=models.CASCADE, related_name="pedidos")
 
@@ -293,9 +320,7 @@ class PedidosModel(models.Model):
     clave = models.CharField(max_length=255, null=False)
 
     # Nuevo: id público estable y único para APIs / UI
-#    public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     public_id = models.UUIDField(default=uuid.uuid4, editable=False, null=True, blank=True)
-
 
     estado = models.CharField(
         max_length=20,
@@ -319,11 +344,8 @@ class PedidosModel(models.Model):
     nota_cliente = models.TextField(null=True, blank=True)
     nota_worker = models.TextField(null=True, blank=True)
 
-
-
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(default=timezone.now)
-
 
     class Meta:
         indexes = [
@@ -363,7 +385,6 @@ class PedidoProductosModel(models.Model):
     imagen_principal_snapshot = models.CharField(max_length=500, null=False, default="")
 
     # Legacy (opcional): para no romper datos viejos mientras migras
-    # Puedes borrar estos campos cuando termines el backfill y ya no los uses.
     producto = models.ForeignKey(ProductosModel, on_delete=models.SET_NULL, null=True, blank=True)
     color = models.CharField(max_length=50, null=True, blank=True)
     precio_unitario_producto = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)

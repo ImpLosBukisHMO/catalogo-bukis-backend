@@ -42,7 +42,7 @@ class ProductosListCreate(generics.ListCreateAPIView):
 
         item = self.request.query_params.get("item")
         if item:
-            qs = qs.filter(item=item)
+            qs = qs.filter(producto_colores__item=item)
 
         color = self.request.query_params.get("color")
         color_id = None
