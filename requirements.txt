@@ -5,13 +5,11 @@ djangorestframework==3.16.1
 djangorestframework-jwt==1.11.0
 djangorestframework_simplejwt==5.5.1
 dotenv==0.9.9
-django-cors-headers==4.7.0
-python-dotenv==1.1.0
+python-dotenv==1.2.1
 pillow==12.0.0
 psycopg==3.3.2
 psycopg-binary==3.3.2
 PyJWT==1.7.1
-python-dotenv==1.2.1
 sqlparse==0.5.5
 tzdata==2025.3
 gunicorn==23.0.0
