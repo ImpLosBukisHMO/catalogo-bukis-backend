@@ -158,3 +158,16 @@ vite.config.ts.timestamp-*
 # Django
 ./catalogo_backend/api/__pycache__
 ./catalogo_backend/catalogo_backend/__pycache__
+# Django
+staticfiles/
+db.sqlite3-journal
+local_settings.py
+
+# Environment variables
+.env.local
+.env.production
+
+# IDE
+.idea/
+*.swp
+*.swo

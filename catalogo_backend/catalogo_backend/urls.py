@@ -34,5 +34,5 @@ urlpatterns = [
     path("api/", include("api.urls")),
 ]
 
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# Sirve media files siempre — en prod el MEDIA_ROOT apunta al Railway Volume
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
