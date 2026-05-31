@@ -6,6 +6,23 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 
+# Python virtual environment
+venv
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+__pycache__/
+*.pyc
+
+# Mac
+.DS_Store
+
+# Django
+db.sqlite3
+media/
+
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
@@ -137,3 +154,20 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Django
+./catalogo_backend/api/__pycache__
+./catalogo_backend/catalogo_backend/__pycache__
+# Django
+staticfiles/
+db.sqlite3-journal
+local_settings.py
+
+# Environment variables
+.env.local
+.env.production
+
+# IDE
+.idea/
+*.swp
+*.swo
