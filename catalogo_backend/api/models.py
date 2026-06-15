@@ -174,6 +174,7 @@ class ProductoVariantesModel(models.Model):
     )
 
     item = models.CharField(max_length=50, null=False, default="")
+    precio = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     stock = models.PositiveIntegerField(default=0)
     activo = models.BooleanField(default=True)
 
@@ -193,6 +194,10 @@ class ProductoVariantesModel(models.Model):
 
     def __str__(self) -> str:
         return f"Producto {self.producto_id} - Color {self.color_id} - Stock {self.stock}"
+
+    @property
+    def precio_efectivo(self):
+        return self.precio if self.precio is not None else self.producto.precio
 
 
 # ProductosImagenes (galería y principal por producto o por variante).

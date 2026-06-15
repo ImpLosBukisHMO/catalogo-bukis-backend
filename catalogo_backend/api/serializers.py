@@ -218,7 +218,7 @@ class ProductoDetalleSerializer(ProductosSerializer):
 class FavoritoVarianteSerializer(serializers.ModelSerializer):
     nombre_producto = serializers.CharField(source="producto.nombre", read_only=True)
     precio = serializers.DecimalField(
-        source="producto.precio", max_digits=10, decimal_places=2, read_only=True
+        source="precio_efectivo", max_digits=10, decimal_places=2, read_only=True
     )
     color = ColorMiniSerializer(read_only=True)
     imagen = serializers.SerializerMethodField()
@@ -345,7 +345,7 @@ class CarritoItemReadSerializer(serializers.ModelSerializer):
     color_nombre = serializers.CharField(source="variante.color.nombre", read_only=True)
     color_hex = serializers.CharField(source="variante.color.hex", read_only=True)
     precio_unitario = serializers.DecimalField(
-        source="variante.producto.precio",
+        source="variante.precio_efectivo",
         max_digits=10,
         decimal_places=2,
         read_only=True,
@@ -369,7 +369,7 @@ class CarritoItemReadSerializer(serializers.ModelSerializer):
         ]
 
     def get_subtotal_linea(self, obj):
-        return obj.variante.producto.precio * obj.cantidad
+        return obj.variante.precio_efectivo * obj.cantidad
 
     def get_imagen(self, obj):
         return get_variante_imagen(obj.variante)
@@ -393,6 +393,5 @@ class CarritoReadSerializer(serializers.ModelSerializer):
     def get_subtotal(self, obj):
         total = 0
         for it in obj.items.select_related("variante__producto").all():
-            total += it.variante.producto.precio * it.cantidad
+            total += it.variante.precio_efectivo * it.cantidad
         return total
-

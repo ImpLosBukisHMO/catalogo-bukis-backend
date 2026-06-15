@@ -194,7 +194,7 @@ def carrito_checkout(request):
             p = v.producto
             c = v.color
 
-            precio_unit = p.precio
+            precio_unit = v.precio_efectivo
             subtotal_linea = precio_unit * it.cantidad
 
             imagen_snapshot = get_variante_imagen(v)
