@@ -30,7 +30,7 @@ class ProductosListCreate(generics.ListCreateAPIView):
     def get_queryset(self):
         qs = (
             ProductosModel.objects
-            .all()
+            .filter(disponible=True)
             .order_by("-id")
             .prefetch_related("producto_colores", "producto_colores__color")
         )
@@ -81,9 +81,14 @@ class ProductosListCreate(generics.ListCreateAPIView):
 
 
 class ProductosRetrieveUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
-    queryset = ProductosModel.objects.all()
     lookup_field = "id"
     permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = ProductosModel.objects.all()
+        if self.request.method == "GET":
+            return queryset.filter(disponible=True)
+        return queryset
 
     def get_serializer_class(self):
         if self.request.method == "GET":

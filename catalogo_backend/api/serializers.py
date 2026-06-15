@@ -15,6 +15,7 @@ from .models import (
     CarritoItemModel,
 )
 from . import services
+from api.utils.imagenes import get_variante_imagen
 
 
 # =========================
@@ -186,10 +187,13 @@ class ProductoVariantesSerializer(serializers.ModelSerializer):
 class ProductoVariantesEnProductoSerializer(serializers.ModelSerializer):
     color = ColorMiniSerializer(read_only=True)
     disponible = serializers.SerializerMethodField()
+    precio = serializers.DecimalField(
+        source="precio_efectivo", max_digits=10, decimal_places=2, read_only=True
+    )
 
     class Meta:
         model = ProductoVariantesModel
-        fields = ["id", "color", "stock", "activo", "disponible", "created_at", "updated_at"]
+        fields = ["id", "color", "precio", "stock", "activo", "disponible", "created_at", "updated_at"]
 
     def get_disponible(self, obj):
         return obj.activo and obj.stock > 0
@@ -206,7 +210,7 @@ class ProductoDetalleSerializer(ProductosSerializer):
         fields = ProductosSerializer.Meta.fields + ["variantes"]
 
     def get_variantes(self, obj):
-        qs = ProductoVariantesModel.objects.filter(producto=obj).select_related("color")
+        qs = ProductoVariantesModel.objects.filter(producto=obj).select_related("color", "producto")
         return ProductoVariantesEnProductoSerializer(qs, many=True).data
 
 
@@ -217,7 +221,7 @@ class ProductoDetalleSerializer(ProductosSerializer):
 class FavoritoVarianteSerializer(serializers.ModelSerializer):
     nombre_producto = serializers.CharField(source="producto.nombre", read_only=True)
     precio = serializers.DecimalField(
-        source="producto.precio", max_digits=10, decimal_places=2, read_only=True
+        source="precio_efectivo", max_digits=10, decimal_places=2, read_only=True
     )
     color = ColorMiniSerializer(read_only=True)
     imagen = serializers.SerializerMethodField()
@@ -227,24 +231,7 @@ class FavoritoVarianteSerializer(serializers.ModelSerializer):
         fields = ["id", "item", "stock", "activo", "nombre_producto", "precio", "color", "imagen"]
 
     def get_imagen(self, obj):
-        img = (
-            ProductosImagenesModel.objects
-            .filter(variante=obj, es_principal=True)
-            .order_by("orden", "id")
-            .first()
-        )
-        if img:
-            return img.imagen.url if hasattr(img.imagen, "url") else str(img.imagen)
-        img = (
-            ProductosImagenesModel.objects
-            .filter(producto=obj.producto, es_principal=True)
-            .order_by("orden", "id")
-            .first()
-        )
-        if img:
-            return img.imagen.url if hasattr(img.imagen, "url") else str(img.imagen)
-        p = obj.producto
-        return p.imagen.url if hasattr(p.imagen, "url") else str(p.imagen)
+        return get_variante_imagen(obj)
 
 
 class ProductosFavoritosSerializer(serializers.ModelSerializer):
@@ -361,7 +348,7 @@ class CarritoItemReadSerializer(serializers.ModelSerializer):
     color_nombre = serializers.CharField(source="variante.color.nombre", read_only=True)
     color_hex = serializers.CharField(source="variante.color.hex", read_only=True)
     precio_unitario = serializers.DecimalField(
-        source="variante.producto.precio",
+        source="variante.precio_efectivo",
         max_digits=10,
         decimal_places=2,
         read_only=True,
@@ -385,24 +372,10 @@ class CarritoItemReadSerializer(serializers.ModelSerializer):
         ]
 
     def get_subtotal_linea(self, obj):
-        return obj.variante.producto.precio * obj.cantidad
+        return obj.variante.precio_efectivo * obj.cantidad
 
     def get_imagen(self, obj):
-        p = obj.variante.producto
-
-        # Imagen principal del producto (tabla productos_imagenes)
-        img = (
-            ProductosImagenesModel.objects
-            .filter(producto=p, es_principal=True)
-            .order_by("orden", "id")
-            .first()
-        )
-
-        if img:
-            return img.imagen.url if hasattr(img.imagen, "url") else str(img.imagen)
-
-        # Fallback: imagen directa del producto
-        return p.imagen.url if hasattr(p.imagen, "url") else str(p.imagen)
+        return get_variante_imagen(obj.variante)
 
 
 class CarritoReadSerializer(serializers.ModelSerializer):
@@ -423,40 +396,5 @@ class CarritoReadSerializer(serializers.ModelSerializer):
     def get_subtotal(self, obj):
         total = 0
         for it in obj.items.select_related("variante__producto").all():
-            total += it.variante.producto.precio * it.cantidad
+            total += it.variante.precio_efectivo * it.cantidad
         return total
-
-
-# =========================
-# Worker (sin categoria FK)
-# =========================
-
-class WorkerVariantSerializer(serializers.Serializer):
-    variant_id = serializers.IntegerField()
-    stock = serializers.IntegerField()
-    disponible = serializers.BooleanField()
-    color = ColorMiniSerializer()
-    producto = serializers.SerializerMethodField()
-    imagen_principal = serializers.SerializerMethodField()
-
-    def get_producto(self, obj):
-        p = obj.producto
-        return {
-            "id": p.id,
-            "nombre": p.nombre,
-            "precio": p.precio,
-            "categorias": [c.id for c in p.categorias.all()],
-        }
-
-    def get_imagen_principal(self, obj):
-        img = (
-            ProductosImagenesModel.objects
-            .filter(variante=obj, es_principal=True)
-            .order_by("orden", "id")
-            .first()
-        )
-        if img:
-            return img.imagen.url if hasattr(img.imagen, "url") else str(img.imagen)
-
-        p = obj.producto
-        return p.imagen.url if hasattr(p.imagen, "url") else str(p.imagen)

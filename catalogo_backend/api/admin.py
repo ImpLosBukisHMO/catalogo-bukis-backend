@@ -32,7 +32,10 @@ class AdminProductos(admin.ModelAdmin):
 
 
 class AdminProductoVariantes(admin.ModelAdmin):
-    list_display = ("id", "producto", "color", "stock", "activo")
+    list_display = ("id", "producto", "color", "precio", "stock", "activo")
+
+    def precio(self, obj):
+        return obj.precio_efectivo
 
 class AdminProductosImagenes(admin.ModelAdmin):
     list_display = ("id", "producto", "variante", "orden", "es_principal", "imagen")
