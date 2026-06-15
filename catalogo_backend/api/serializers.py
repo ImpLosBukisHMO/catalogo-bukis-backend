@@ -187,10 +187,13 @@ class ProductoVariantesSerializer(serializers.ModelSerializer):
 class ProductoVariantesEnProductoSerializer(serializers.ModelSerializer):
     color = ColorMiniSerializer(read_only=True)
     disponible = serializers.SerializerMethodField()
+    precio = serializers.DecimalField(
+        source="precio_efectivo", max_digits=10, decimal_places=2, read_only=True
+    )
 
     class Meta:
         model = ProductoVariantesModel
-        fields = ["id", "color", "stock", "activo", "disponible", "created_at", "updated_at"]
+        fields = ["id", "color", "precio", "stock", "activo", "disponible", "created_at", "updated_at"]
 
     def get_disponible(self, obj):
         return obj.activo and obj.stock > 0
@@ -207,7 +210,7 @@ class ProductoDetalleSerializer(ProductosSerializer):
         fields = ProductosSerializer.Meta.fields + ["variantes"]
 
     def get_variantes(self, obj):
-        qs = ProductoVariantesModel.objects.filter(producto=obj).select_related("color")
+        qs = ProductoVariantesModel.objects.filter(producto=obj).select_related("color", "producto")
         return ProductoVariantesEnProductoSerializer(qs, many=True).data
 
 
