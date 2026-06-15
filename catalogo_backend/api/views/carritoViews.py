@@ -11,7 +11,6 @@ from api.models import (
     CarritoModel,
     CarritoItemModel,
     ProductoVariantesModel,
-    ProductosImagenesModel,
     PedidosModel,
     PedidoProductosModel,
 )
@@ -20,6 +19,7 @@ from api.serializers import (
     CarritoItemCreateSerializer,
     CarritoItemUpdateSerializer,
 )
+from api.utils.imagenes import get_variante_imagen
 
 
 def _get_or_create_active_cart(user):
@@ -197,22 +197,7 @@ def carrito_checkout(request):
             precio_unit = p.precio
             subtotal_linea = precio_unit * it.cantidad
 
-            img = (
-                ProductosImagenesModel.objects.filter(variante=v, es_principal=True)
-                .order_by("orden", "id")
-                .first()
-            )
-            if not img:
-                img = (
-                    ProductosImagenesModel.objects.filter(variante=v)
-                    .order_by("orden", "id")
-                    .first()
-                )
-
-            if img:
-                imagen_snapshot = img.imagen.url if hasattr(img.imagen, "url") else str(img.imagen)
-            else:
-                imagen_snapshot = p.imagen.url if hasattr(p.imagen, "url") else str(p.imagen)
+            imagen_snapshot = get_variante_imagen(v)
 
             PedidoProductosModel.objects.create(
                 pedido=pedido,

@@ -15,6 +15,7 @@ from .models import (
     CarritoItemModel,
 )
 from . import services
+from api.utils.imagenes import get_variante_imagen
 
 
 # =========================
@@ -227,24 +228,7 @@ class FavoritoVarianteSerializer(serializers.ModelSerializer):
         fields = ["id", "item", "stock", "activo", "nombre_producto", "precio", "color", "imagen"]
 
     def get_imagen(self, obj):
-        img = (
-            ProductosImagenesModel.objects
-            .filter(variante=obj, es_principal=True)
-            .order_by("orden", "id")
-            .first()
-        )
-        if img:
-            return img.imagen.url if hasattr(img.imagen, "url") else str(img.imagen)
-        img = (
-            ProductosImagenesModel.objects
-            .filter(producto=obj.producto, es_principal=True)
-            .order_by("orden", "id")
-            .first()
-        )
-        if img:
-            return img.imagen.url if hasattr(img.imagen, "url") else str(img.imagen)
-        p = obj.producto
-        return p.imagen.url if hasattr(p.imagen, "url") else str(p.imagen)
+        return get_variante_imagen(obj)
 
 
 class ProductosFavoritosSerializer(serializers.ModelSerializer):
@@ -388,21 +372,7 @@ class CarritoItemReadSerializer(serializers.ModelSerializer):
         return obj.variante.producto.precio * obj.cantidad
 
     def get_imagen(self, obj):
-        p = obj.variante.producto
-
-        # Imagen principal del producto (tabla productos_imagenes)
-        img = (
-            ProductosImagenesModel.objects
-            .filter(producto=p, es_principal=True)
-            .order_by("orden", "id")
-            .first()
-        )
-
-        if img:
-            return img.imagen.url if hasattr(img.imagen, "url") else str(img.imagen)
-
-        # Fallback: imagen directa del producto
-        return p.imagen.url if hasattr(p.imagen, "url") else str(p.imagen)
+        return get_variante_imagen(obj.variante)
 
 
 class CarritoReadSerializer(serializers.ModelSerializer):
@@ -426,37 +396,3 @@ class CarritoReadSerializer(serializers.ModelSerializer):
             total += it.variante.producto.precio * it.cantidad
         return total
 
-
-# =========================
-# Worker (sin categoria FK)
-# =========================
-
-class WorkerVariantSerializer(serializers.Serializer):
-    variant_id = serializers.IntegerField()
-    stock = serializers.IntegerField()
-    disponible = serializers.BooleanField()
-    color = ColorMiniSerializer()
-    producto = serializers.SerializerMethodField()
-    imagen_principal = serializers.SerializerMethodField()
-
-    def get_producto(self, obj):
-        p = obj.producto
-        return {
-            "id": p.id,
-            "nombre": p.nombre,
-            "precio": p.precio,
-            "categorias": [c.id for c in p.categorias.all()],
-        }
-
-    def get_imagen_principal(self, obj):
-        img = (
-            ProductosImagenesModel.objects
-            .filter(variante=obj, es_principal=True)
-            .order_by("orden", "id")
-            .first()
-        )
-        if img:
-            return img.imagen.url if hasattr(img.imagen, "url") else str(img.imagen)
-
-        p = obj.producto
-        return p.imagen.url if hasattr(p.imagen, "url") else str(p.imagen)
