@@ -38,7 +38,7 @@ class WorkerVariantSerializer(serializers.ModelSerializer):
         return {
             "id": p.id,
             "nombre": p.nombre,
-            "precio": str(p.precio),
+            "precio": str(obj.precio_efectivo),
             "categorias": [c.id for c in p.categorias.all()],
         }
 
