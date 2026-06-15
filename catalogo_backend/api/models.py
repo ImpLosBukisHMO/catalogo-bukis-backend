@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.validators import RegexValidator
+from django.db.models import Q
 import uuid
 import os
 from django.utils import timezone
@@ -186,6 +187,11 @@ class ProductoVariantesModel(models.Model):
         ordering = ["color__nombre", "id"]
         constraints = [
             models.UniqueConstraint(fields=["producto", "color"], name="uniq_producto_color"),
+            models.UniqueConstraint(
+                fields=["producto", "item"],
+                condition=~Q(item=""),
+                name="unique_producto_item_when_set",
+            ),
         ]
         indexes = [
             models.Index(fields=["producto"]),

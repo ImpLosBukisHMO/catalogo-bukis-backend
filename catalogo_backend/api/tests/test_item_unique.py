@@ -80,31 +80,40 @@ def _create_product_for_worker(worker: UsuariosModel, nombre: str = "Producto Wo
 # ---------------------------------------------------------------------------
 
 class DuplicateItemCurrentBehaviorTest(TestCase):
-    """Documents what was possible BEFORE the uniqueness constraint."""
+    """
+    Documents the evolution of item uniqueness behavior.
+
+    BEFORE migration 0021: two variants with the same non-empty item under
+    the same product were permitted (no constraint existed).
+
+    AFTER migration 0021 (current state): the partial UniqueConstraint
+    unique_producto_item_when_set prevents this; an IntegrityError is raised.
+
+    This class retains the historical test renamed to reflect the CURRENT behavior,
+    and adds an explicit assertion that the constraint is now enforced at DB level.
+    """
 
     def test_duplicate_item_accepted_before_constraint(self):
         """
-        Two variants with item='SKU-001' under the same product
-        should currently save without error (pre-constraint behavior).
+        HISTORICAL CONTEXT: Before migration 0021, two variants with the same
+        non-empty item under the same product could be saved without error.
+        Migration 0021 introduced a partial UniqueConstraint that now blocks this.
 
-        NOTE: Once migration 0021 (UniqueConstraint) is applied, this
-        test expectation will be superseded by test_duplicate_item_rejected.
-        This test is kept to document intent only; the constraint migration
-        makes the DB enforce uniqueness at the partial index level.
+        This test verifies the constraint IS active (current behavior), which
+        supersedes the original pre-constraint permissive behavior.
         """
         producto = _create_product("Producto SKU Dup")
         color1 = _create_color("Rojo SKU", "#FF0001")
         color2 = _create_color("Azul SKU", "#0000F1")
 
+        # First variant saves fine
         v1 = _create_variant(producto, color1, item="SKU-001")
-        v2 = _create_variant(producto, color2, item="SKU-001")
-
         self.assertEqual(v1.item, "SKU-001")
-        self.assertEqual(v2.item, "SKU-001")
-        self.assertEqual(
-            ProductoVariantesModel.objects.filter(producto=producto, item="SKU-001").count(),
-            2,
-        )
+
+        # Second variant with the same item under the same product now raises
+        # IntegrityError because migration 0021 added the partial UniqueConstraint.
+        with self.assertRaises(IntegrityError):
+            _create_variant(producto, color2, item="SKU-001")
 
 
 # ---------------------------------------------------------------------------
