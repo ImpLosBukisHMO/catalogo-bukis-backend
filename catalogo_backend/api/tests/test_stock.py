@@ -192,8 +192,8 @@ class CheckoutConcurrencyTest(TransactionTestCase):
 
         self.assertEqual(errors, [], f"Unhandled exceptions in threads: {errors}")
 
-        # Exactly one success (201) and one failure (400)
-        self.assertEqual(sorted(results), [400, 201] if 201 in results else results)
+        # Exactly one success (201) and one failure (400), regardless of thread order
+        self.assertEqual(sorted(results), [201, 400], f"Expected one 201 and one 400, got: {results}")
         success_count = results.count(201)
         self.assertEqual(success_count, 1, f"Expected exactly 1 success, got: {results}")
 
