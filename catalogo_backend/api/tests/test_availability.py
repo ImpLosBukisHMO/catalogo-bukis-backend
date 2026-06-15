@@ -63,4 +63,40 @@ class ProductAvailabilityCurrentBehaviorTest(TestCase):
         response = client.get("/api/productos/")
 
         self.assertEqual(response.status_code, 200, response.data)
+        self.assertNotIn(producto.id, [item["id"] for item in response.data])
+
+    def test_disponible_true_product_appears(self):
+        client = APIClient()
+        producto = _create_product("Visible Today", disponible=True)
+        _create_variant(producto, _create_color("Azul availability", "#0000FF"), stock=3)
+
+        response = client.get("/api/productos/")
+
+        self.assertEqual(response.status_code, 200, response.data)
         self.assertIn(producto.id, [item["id"] for item in response.data])
+
+    def test_disponible_false_returns_404_on_detail(self):
+        client = APIClient()
+        producto = _create_product("Hidden Detail", disponible=False)
+        _create_variant(producto, _create_color("Verde availability", "#00FF00"), stock=3)
+
+        response = client.get(f"/api/productos/{producto.id}/")
+
+        self.assertEqual(response.status_code, 404, response.data)
+
+    def test_worker_can_edit_disponible_false_product(self):
+        client = APIClient()
+        worker = _create_user("worker-availability@test.com", staff=True)
+        client.force_authenticate(user=worker)
+        producto = _create_product("Worker Hidden", disponible=False, worker=worker)
+        _create_variant(producto, _create_color("Negro availability", "#111111"), stock=3)
+
+        response = client.patch(
+            f"/api/worker/productos/{producto.id}/",
+            {"nombre": "Worker Hidden Updated"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        producto.refresh_from_db()
+        self.assertEqual(producto.nombre, "Worker Hidden Updated")
