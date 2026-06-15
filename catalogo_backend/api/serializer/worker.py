@@ -8,6 +8,7 @@ from api.models import (
     ColorModel,
     PedidosModel,
 )
+from api.utils.imagenes import get_variante_imagen
 
 # para productos
 class WorkerVariantSerializer(serializers.ModelSerializer):
@@ -56,22 +57,7 @@ class WorkerVariantSerializer(serializers.ModelSerializer):
     # Imagen principal
     # -------------------------
     def get_imagen_principal(self, obj):
-        # 1. Imagen principal de la variante
-        img = (
-            ProductosImagenesModel.objects
-            .filter(variante=obj, es_principal=True)
-            .first()
-        )
-
-        # 2. Fallback: imagen principal del producto
-        if not img:
-            img = (
-                ProductosImagenesModel.objects
-                .filter(producto=obj.producto, es_principal=True)
-                .first()
-            )
-
-        return img.imagen.url if img else None
+        return get_variante_imagen(obj)
 
 
 # para pedidos

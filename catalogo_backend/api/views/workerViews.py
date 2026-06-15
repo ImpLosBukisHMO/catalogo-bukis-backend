@@ -32,7 +32,6 @@ class WorkerVariantListView(APIView):
             ProductoVariantesModel.objects
             .select_related("producto", "color")
             .prefetch_related("producto__categorias")
-            .order_by("producto__nombre", "color__nombre")
         )
 
         serializer = WorkerVariantSerializer(qs, many=True)

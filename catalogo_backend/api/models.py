@@ -182,6 +182,7 @@ class ProductoVariantesModel(models.Model):
 
     class Meta:
         db_table = "producto_colores"
+        ordering = ["color__nombre", "id"]
         constraints = [
             models.UniqueConstraint(fields=["producto", "color"], name="uniq_producto_color"),
         ]

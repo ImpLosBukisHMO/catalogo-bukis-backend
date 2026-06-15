@@ -8,7 +8,7 @@ class ProductoVariantesListCreateView(generics.ListCreateAPIView):
     serializer_class = ProductoVariantesSerializer
 
     def get_queryset(self):
-        qs = ProductoVariantesModel.objects.all().select_related("producto", "color").order_by("-id")
+        qs = ProductoVariantesModel.objects.all().select_related("producto", "color")
 
         producto_id = self.request.query_params.get("producto")
         color_id = self.request.query_params.get("color")
