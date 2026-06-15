@@ -221,3 +221,46 @@ class VariantPriceSerializerExposureTest(TestCase):
         snapshot = PedidoProductosModel.objects.get(pedido_id=response.data["pedido_id"])
         self.assertEqual(snapshot.precio_unitario_snapshot, Decimal("150.00"))
         self.assertEqual(snapshot.subtotal_linea_snapshot, Decimal("300.00"))
+
+
+class ProductDetailVariantPriceContractTest(TestCase):
+    def test_product_detail_variant_price_falls_back_to_product_price_when_override_is_null(self):
+        client = APIClient()
+        producto = _create_product("Detail Fallback", precio=Decimal("100.00"))
+        variante = _create_variant(producto, _create_color("Rojo detalle", "#FF1111"))
+
+        response = client.get(f"/api/productos/{producto.id}/")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        variant_payload = next(item for item in response.data["variantes"] if item["id"] == variante.id)
+        self.assertEqual(variant_payload["precio"], "100.00")
+
+    def test_product_detail_variant_price_uses_variant_override_when_present(self):
+        client = APIClient()
+        producto = _create_product("Detail Override", precio=Decimal("100.00"))
+        variante = _create_variant(
+            producto,
+            _create_color("Azul detalle", "#1111FF"),
+            precio=Decimal("150.00"),
+        )
+
+        response = client.get(f"/api/productos/{producto.id}/")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        variant_payload = next(item for item in response.data["variantes"] if item["id"] == variante.id)
+        self.assertEqual(variant_payload["precio"], "150.00")
+
+    def test_product_detail_variant_price_keeps_zero_override(self):
+        client = APIClient()
+        producto = _create_product("Detail Zero Override", precio=Decimal("100.00"))
+        variante = _create_variant(
+            producto,
+            _create_color("Verde detalle", "#11FF11"),
+            precio=Decimal("0.00"),
+        )
+
+        response = client.get(f"/api/productos/{producto.id}/")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        variant_payload = next(item for item in response.data["variantes"] if item["id"] == variante.id)
+        self.assertEqual(variant_payload["precio"], "0.00")
