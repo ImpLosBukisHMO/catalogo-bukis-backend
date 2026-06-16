@@ -34,13 +34,15 @@ PLACEHOLDER_IMAGE = "seed/placeholder.jpg"
 # ----------------------------------------------------------------
 SEED_PREFIX = "[SEED]"
 CATEGORY_NAME = f"{SEED_PREFIX} Staging"
-COLOR_NAMES = ["Rojo", "Azul", "Verde", "Negro", "Blanco"]
+COLOR_NAMES = ["Rojo", "Azul", "Verde", "Negro", "Blanco", "Gris", "Rosa"]
 COLOR_HEX_MAP = {
     "Rojo": "#FF0000",
     "Azul": "#0000FF",
     "Verde": "#00FF00",
     "Negro": "#000000",
     "Blanco": "#FFFFFF",
+    "Gris": "#808080",
+    "Rosa": "#FFC0CB",
 }
 
 # ----------------------------------------------------------------
