@@ -159,6 +159,170 @@ SCENARIOS = [
     },
 ]
 
+# ----------------------------------------------------------------
+# Real demo products (without [SEED] prefix)
+# These are products that look good in the catalog UI
+# ----------------------------------------------------------------
+REAL_PRODUCTS = [
+    {
+        "id": 101,
+        "nombre": "Taza Clásica Bukis",
+        "precio": 89.00,
+        "imagen": "img/products/placeholder.jpg",
+        "descripcion": "Taza cerámica 350ml con diseño exclusivo.",
+        "peso": 0.35,
+        "medidas": "10x8x9 cm",
+        "capacidad": "350ml",
+        "disponible": True,
+        "variants": [
+            {"color_name": "Rojo", "item": "TCB-R", "precio": None, "stock": 20, "activo": True},
+            {"color_name": "Azul", "item": "TCB-A", "precio": None, "stock": 15, "activo": True},
+            {"color_name": "Negro", "item": "TCB-N", "precio": None, "stock": 10, "activo": True},
+        ],
+    },
+    {
+        "id": 102,
+        "nombre": "Taza Mágica Bukis",
+        "precio": 129.00,
+        "imagen": "img/products/placeholder.jpg",
+        "descripcion": "Taza que cambia de color con el calor.",
+        "peso": 0.35,
+        "medidas": "10x8x9 cm",
+        "capacidad": "350ml",
+        "disponible": True,
+        "variants": [
+            {"color_name": "Blanco", "item": "TMB-B", "precio": None, "stock": 8, "activo": True},
+        ],
+    },
+    {
+        "id": 103,
+        "nombre": "Morral Escolar",
+        "precio": 349.00,
+        "imagen": "img/products/placeholder.jpg",
+        "descripcion": "Morral espacioso con compartimento para laptop.",
+        "peso": 0.8,
+        "medidas": "40x30x15 cm",
+        "capacidad": "20L",
+        "disponible": True,
+        "variants": [
+            {"color_name": "Azul", "item": "ME-A", "precio": None, "stock": 18, "activo": True},
+            {"color_name": "Gris", "item": "ME-G", "precio": None, "stock": 10, "activo": True},
+            {"color_name": "Negro", "item": "ME-N", "precio": None, "stock": 25, "activo": True},
+        ],
+    },
+    {
+        "id": 104,
+        "nombre": "Morral Deportivo",
+        "precio": 279.00,
+        "imagen": "img/products/placeholder.jpg",
+        "descripcion": "Morral para gimnasio con compartimento para zapatos.",
+        "peso": 0.6,
+        "medidas": "50x25x20 cm",
+        "capacidad": "25L",
+        "disponible": True,
+        "variants": [
+            {"color_name": "Azul", "item": "MD-A", "precio": None, "stock": 5, "activo": True},
+            {"color_name": "Negro", "item": "MD-N", "precio": None, "stock": 20, "activo": True},
+            {"color_name": "Rojo", "item": "MD-R", "precio": None, "stock": 8, "activo": True},
+        ],
+    },
+    {
+        "id": 105,
+        "nombre": "Playera Unisex",
+        "precio": 199.00,
+        "imagen": "img/products/placeholder.jpg",
+        "descripcion": "Playera 100% algodón con logo Bukis.",
+        "peso": 0.2,
+        "medidas": "S-XXL",
+        "capacidad": None,
+        "disponible": True,
+        "variants": [
+            {"color_name": "Blanco", "item": "PU-B", "precio": None, "stock": 28, "activo": True},
+            {"color_name": "Gris", "item": "PU-G", "precio": None, "stock": 15, "activo": True},
+            {"color_name": "Negro", "item": "PU-N", "precio": None, "stock": 25, "activo": True},
+            {"color_name": "Rojo", "item": "PU-R", "precio": None, "stock": 10, "activo": True},
+        ],
+    },
+    {
+        "id": 106,
+        "nombre": "Sudadera Con Capucha",
+        "precio": 449.00,
+        "imagen": "img/products/placeholder.jpg",
+        "descripcion": "Sudadera premium con capucha y bolsillo canguro.",
+        "peso": 0.5,
+        "medidas": "S-XXL",
+        "capacidad": None,
+        "disponible": True,
+        "variants": [
+            {"color_name": "Azul", "item": "SC-A", "precio": None, "stock": 8, "activo": True},
+            {"color_name": "Gris", "item": "SC-G", "precio": None, "stock": 15, "activo": True},
+            {"color_name": "Negro", "item": "SC-N", "precio": None, "stock": 20, "activo": True},
+        ],
+    },
+    {
+        "id": 107,
+        "nombre": "Llavero Metálico",
+        "precio": 59.00,
+        "imagen": "img/products/placeholder.jpg",
+        "descripcion": "Llavero metálico con logo grabado.",
+        "peso": 0.05,
+        "medidas": "5x3x0.5 cm",
+        "capacidad": None,
+        "disponible": True,
+        "variants": [
+            {"color_name": "Gris", "item": "LM-G", "precio": None, "stock": 40, "activo": True},
+            {"color_name": "Negro", "item": "LM-N", "precio": None, "stock": 50, "activo": True},
+        ],
+    },
+    {
+        "id": 108,
+        "nombre": "Pin Esmaltado",
+        "precio": 79.00,
+        "imagen": "img/products/placeholder.jpg",
+        "descripcion": "Pin esmaltado con diseño exclusivo Bukis.",
+        "peso": 0.02,
+        "medidas": "3x3 cm",
+        "capacidad": None,
+        "disponible": True,
+        "variants": [
+            {"color_name": "Azul", "item": "PE-A", "precio": None, "stock": 35, "activo": True},
+            {"color_name": "Rojo", "item": "PE-R", "precio": None, "stock": 34, "activo": True},
+            {"color_name": "Rosa", "item": "PE-RO", "precio": None, "stock": 20, "activo": True},
+        ],
+    },
+    {
+        "id": 109,
+        "nombre": "Libreta A5",
+        "precio": 119.00,
+        "imagen": "img/products/placeholder.jpg",
+        "descripcion": "Libreta A5 con hojas de puntos y portada rígida.",
+        "peso": 0.3,
+        "medidas": "21x14.8x1 cm",
+        "capacidad": "80 hojas",
+        "disponible": True,
+        "variants": [
+            {"color_name": "Negro", "item": "LA-N", "precio": None, "stock": 22, "activo": True},
+            {"color_name": "Rosa", "item": "LA-RO", "precio": None, "stock": 10, "activo": True},
+        ],
+    },
+    {
+        "id": 110,
+        "nombre": "Pluma Grabada",
+        "precio": 49.00,
+        "imagen": "img/products/placeholder.jpg",
+        "descripcion": "Pluma metálica con grabado personalizado.",
+        "peso": 0.03,
+        "medidas": "14x1 cm",
+        "capacidad": None,
+        "disponible": True,
+        "variants": [
+            {"color_name": "Azul", "item": "PG-A", "precio": None, "stock": 45, "activo": True},
+            {"color_name": "Negro", "item": "PG-N", "precio": None, "stock": 60, "activo": True},
+            {"color_name": "Rojo", "item": "PG-R", "precio": None, "stock": 3, "activo": True},
+        ],
+    },
+]
+
 
 class Command(BaseCommand):
     help = (
@@ -176,6 +340,11 @@ class Command(BaseCommand):
             "--clear",
             action="store_true",
             help="Remove all [SEED]-prefixed records before seeding.",
+        )
+        parser.add_argument(
+            "--real-data",
+            action="store_true",
+            help="Seed real demo products instead of test scenarios.",
         )
 
     # ------------------------------------------------------------------
@@ -224,7 +393,7 @@ class Command(BaseCommand):
         Returns (product, variants, created).
         """
         nombre = scenario["nombre"]
-        desc = f"Seed scenario {scenario['id']}: {scenario['name']}"
+        desc = scenario.get("descripcion", f"Seed scenario {scenario.get('id', 'N/A')}: {scenario.get('name', nombre)}")
 
         if dry_run:
             return None, [], True
@@ -232,12 +401,12 @@ class Command(BaseCommand):
         product, created = ProductosModel.objects.get_or_create(
             nombre=nombre,
             defaults={
-                "imagen": PLACEHOLDER_IMAGE,
+                "imagen": scenario.get("imagen", PLACEHOLDER_IMAGE),
                 "descripcion": desc,
                 "precio": scenario["precio"],
-                "peso": 1.00,
-                "medidas": "10x10x10 cm (seed)",
-                "capacidad": None,
+                "peso": scenario.get("peso", 1.00),
+                "medidas": scenario.get("medidas", "10x10x10 cm (seed)"),
+                "capacidad": scenario.get("capacidad", None),
                 "disponible": scenario["disponible"],
             },
         )
@@ -310,8 +479,14 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         dry_run = options["dry_run"]
         clear = options["clear"]
+        real_data = options["real_data"]
 
         self.stdout.write(self.style.MIGRATE_HEADING("=== Staging Seed Command ==="))
+
+        if real_data:
+            self.stdout.write(self.style.WARNING("Mode: REAL DATA (demo products)\n"))
+        else:
+            self.stdout.write(self.style.WARNING("Mode: TEST SCENARIOS (issue #11)\n"))
 
         # --clear
         if clear:
@@ -327,7 +502,7 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.SUCCESS("Clear complete.\n"))
 
         # Check for pre-existing seed records (idempotency guard)
-        if not dry_run:
+        if not dry_run and not real_data:
             existing_count = ProductosModel.objects.filter(
                 nombre__startswith=SEED_PREFIX
             ).count()
@@ -340,16 +515,20 @@ class Command(BaseCommand):
                 )
                 return
 
+        # Select data source
+        products_to_seed = REAL_PRODUCTS if real_data else SCENARIOS
+        mode_label = "REAL" if real_data else "TEST"
+
         # Bootstrap shared resources
         self.stdout.write("\n📦 Bootstrapping shared dependencies...")
         cat, color_map = self._bootstrap_dependencies(dry_run)
 
-        # Seed each scenario
-        self.stdout.write(f"\n🌱 Seeding {len(SCENARIOS)} scenario products...\n")
+        # Seed each product
+        self.stdout.write(f"\n🌱 Seeding {len(products_to_seed)} {mode_label} products...\n")
 
         summary_rows: list[dict] = []
 
-        for scenario in SCENARIOS:
+        for scenario in products_to_seed:
             product, variants, created = self._seed_product(
                 scenario, cat, color_map, dry_run
             )
@@ -361,8 +540,8 @@ class Command(BaseCommand):
             status = "would create" if dry_run else ("CREATED" if created else "already exists")
 
             summary_rows.append({
-                "id": scenario["id"],
-                "name": scenario["name"],
+                "id": scenario.get("id", "-"),
+                "name": scenario.get("name", scenario["nombre"]),
                 "product": scenario["nombre"],
                 "variants": n_variants,
                 "active": active_variants if not dry_run else "-",
@@ -371,12 +550,13 @@ class Command(BaseCommand):
 
             if dry_run:
                 self.stdout.write(
-                    f"  [{status}] S{scenario['id']}: {scenario['nombre']} "
+                    f"  [{status}] {scenario['nombre']} "
                     f"({n_variants} variant(s))"
                 )
             else:
+                label = scenario.get("name", scenario["nombre"])
                 self.stdout.write(
-                    f"  [{status}] S{scenario['id']:>2} | {scenario['name']:<40} "
+                    f"  [{status}] {label:<40} "
                     f"| variants={n_variants} | active={active_variants}"
                 )
 
@@ -391,7 +571,7 @@ class Command(BaseCommand):
             total_products += 1
             total_variants += row["variants"]
             self.stdout.write(
-                f"  S{row['id']:<3} {row['name']:<42} "
+                f"  {row['id']:<4} {row['name']:<42} "
                 f"variants={row['variants']:<3} [{row['status']}]"
             )
 
