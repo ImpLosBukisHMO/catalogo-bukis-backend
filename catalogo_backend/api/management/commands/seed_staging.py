@@ -1,9 +1,8 @@
 """
 Management command: seed_staging
 
-Seeds the staging database with 8 test scenarios from issue #11.
-Each scenario corresponds to a specific product-variant combination
-that must be validated by the frontend.
+Seeds the staging database with 8 test scenarios from issue #11
+or real demo products with generated images.
 
 Idempotent — running twice does not duplicate records.
 All seed records use a [SEED] prefix in their names for easy identification.
@@ -12,9 +11,17 @@ Usage:
     python manage.py seed_staging
     python manage.py seed_staging --dry-run
     python manage.py seed_staging --clear
+    python manage.py seed_staging --real-data
+    python manage.py seed_staging --real-data --generate-images
 """
 
+import os
+from io import BytesIO
+
 from django.core.management.base import BaseCommand
+from django.core.files.base import ContentFile
+from django.conf import settings
+from PIL import Image, ImageDraw, ImageFont
 
 from api.models import (
     CategoriasModel,
@@ -24,10 +31,40 @@ from api.models import (
 )
 
 # ----------------------------------------------------------------
-# Placeholder image path — required by model but no real file is
-# needed for data-validation seed records.
+# Placeholder image path — used as fallback
 # ----------------------------------------------------------------
 PLACEHOLDER_IMAGE = "seed/placeholder.jpg"
+
+# ----------------------------------------------------------------
+# Image generation settings
+# ----------------------------------------------------------------
+IMAGE_WIDTH = 600
+IMAGE_HEIGHT = 400
+IMAGE_QUALITY = 85
+
+# Color palette for real products
+PRODUCT_COLORS = {
+    "Taza": (139, 90, 43),       # Brown
+    "Morral": (70, 130, 180),    # Steel blue
+    "Playera": (255, 99, 71),    # Tomato
+    "Sudadera": (106, 90, 205),  # Slate blue
+    "Llavero": (192, 192, 192),  # Silver
+    "Pin": (255, 215, 0),        # Gold
+    "Libreta": (60, 179, 113),   # Medium sea green
+    "Pluma": (30, 144, 255),     # Dodger blue
+}
+
+# Seed scenario colors
+SEED_COLORS = {
+    1: (34, 139, 34),   # Green
+    2: (220, 20, 60),   # Crimson
+    3: (255, 140, 0),   # Dark orange
+    4: (128, 0, 128),   # Purple
+    5: (0, 128, 128),   # Teal
+    6: (128, 128, 0),   # Olive
+    7: (70, 130, 180),  # Steel blue
+    8: (210, 105, 30),  # Chocolate
+}
 
 # ----------------------------------------------------------------
 # Shared seed helpers
@@ -348,6 +385,131 @@ class Command(BaseCommand):
             action="store_true",
             help="Seed real demo products instead of test scenarios.",
         )
+        parser.add_argument(
+            "--generate-images",
+            action="store_true",
+            help="Generate product images for seeded products.",
+        )
+
+    # ------------------------------------------------------------------
+    # Image generation
+    # ------------------------------------------------------------------
+    def _get_product_color(self, product_name: str, scenario_id: int = None):
+        """Get a color for a product based on its name or scenario ID."""
+        # Check product name keywords
+        for keyword, color in PRODUCT_COLORS.items():
+            if keyword in product_name:
+                return color
+        # Check scenario colors
+        if scenario_id and scenario_id in SEED_COLORS:
+            return SEED_COLORS[scenario_id]
+        # Default color
+        return (100, 100, 100)
+
+    def _generate_product_image(self, product_name: str, scenario_id: int = None) -> str:
+        """
+        Generate a product image and return the path.
+        Returns None if generation fails.
+        """
+        try:
+            # Create image
+            base_color = self._get_product_color(product_name, scenario_id)
+            img = Image.new('RGB', (IMAGE_WIDTH, IMAGE_HEIGHT), base_color)
+            draw = ImageDraw.Draw(img)
+
+            # Add gradient overlay
+            for i in range(IMAGE_HEIGHT):
+                alpha = int(255 * (1 - i / IMAGE_HEIGHT) * 0.3)
+                overlay = Image.new('RGBA', (IMAGE_WIDTH, 1), (255, 255, 255, alpha))
+                img.paste(Image.blend(
+                    Image.new('RGBA', (IMAGE_WIDTH, 1), (*base_color, 255)),
+                    overlay, 0.5
+                ), (0, i))
+
+            # Add text
+            draw = ImageDraw.Draw(img)
+            
+            # Add product name
+            text = product_name[:20] if len(product_name) > 20 else product_name
+            
+            # Try to use a font, fallback to default
+            try:
+                font_large = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 40)
+                font_small = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 24)
+            except:
+                font_large = ImageFont.load_default()
+                font_small = font_large
+
+            # Draw product name
+            bbox = draw.textbbox((0, 0), text, font=font_large)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+            x = (IMAGE_WIDTH - text_width) / 2
+            y = (IMAGE_HEIGHT - text_height) / 2 - 20
+            
+            # Shadow
+            draw.text((x+2, y+2), text, font=font_large, fill=(0, 0, 0, 128))
+            # Main text
+            draw.text((x, y), text, font=font_large, fill=(255, 255, 255))
+
+            # Add "Bukis" label
+            label_text = "Bukis Store"
+            bbox = draw.textbbox((0, 0), label_text, font=font_small)
+            label_width = bbox[2] - bbox[0]
+            draw.text(
+                ((IMAGE_WIDTH - label_width) / 2, y + 60),
+                label_text,
+                font=font_small,
+                fill=(255, 255, 255, 180)
+            )
+
+            # Save to media directory
+            media_root = settings.MEDIA_ROOT
+            image_dir = os.path.join(media_root, 'img', 'products')
+            os.makedirs(image_dir, exist_ok=True)
+
+            # Generate filename
+            safe_name = product_name.replace('[SEED]', '').strip().replace(' ', '_').replace('-', '_')[:30]
+            filename = f"seed_{safe_name}_{scenario_id or 'real'}.jpg"
+            filepath = os.path.join(image_dir, filename)
+
+            # Save image
+            img.save(filepath, 'JPEG', quality=IMAGE_QUALITY)
+
+            # Return relative path
+            return f"img/products/{filename}"
+
+        except Exception as e:
+            self.stdout.write(f"  ⚠️  Image generation failed for {product_name}: {e}")
+            return None
+
+    def _generate_images_for_products(self, products):
+        """Generate images for all seed products."""
+        self.stdout.write("\n🎨 Generating product images...")
+        
+        for product in products:
+            try:
+                # Check if image exists and is not a placeholder
+                if product.imagen:
+                    imagen_path = str(product.imagen)
+                    if 'seed' not in imagen_path and 'placeholder' not in imagen_path:
+                        # Skip if already has a real image
+                        continue
+            except:
+                # If file doesn't exist, continue to generate
+                pass
+
+            image_path = self._generate_product_image(
+                product.nombre,
+                getattr(product, 'id', None)
+            )
+            
+            if image_path:
+                product.imagen = image_path
+                product.save(update_fields=['imagen'])
+                self.stdout.write(f"  ✅ Image generated: {product.nombre}")
+            else:
+                self.stdout.write(f"  ⚠️  Using placeholder for: {product.nombre}")
 
     # ------------------------------------------------------------------
     # Bootstrap: shared dependencies (category + colors)
@@ -583,6 +745,14 @@ class Command(BaseCommand):
             f"  Total: {total_products} products, {total_variants} variants{mode_label}"
         )
         self.stdout.write("=" * 70)
+
+        # Generate images if requested
+        if not dry_run and options["generate_images"]:
+            self.stdout.write("\n")
+            seeded_products = ProductosModel.objects.filter(
+                nombre__startswith=SEED_PREFIX if not real_data else ""
+            ).filter(nombre__in=[s["nombre"] for s in products_to_seed])
+            self._generate_images_for_products(seeded_products)
 
         if dry_run:
             self.stdout.write(
