@@ -6,7 +6,7 @@
 - **Framework:** Django 6.x + Django REST Framework 3.16
 - **Auth:** JWT (SimpleJWT 5.5)
 - **Base de datos:** PostgreSQL 16
-- **Imágenes:** Cloudinary / Railway Volume
+- **Imágenes:** Local File Storage (Railway Volume)
 - **Tests:** Django TestCase + pytest
 
 ---
@@ -268,9 +268,6 @@ DATABASE_URL=postgresql://user:pass@localhost:5432/catalogo
 SECRET_KEY=tu-secret-key-super-seguro
 DEBUG=True
 ALLOWED_HOSTS=localhost,127.0.0.1
-
-# Cloudinary (imágenes)
-CLOUDINARY_URL=cloudinary://api_key:api_secret@cloud_name
 
 # JWT
 ACCESS_TOKEN_LIFETIME=5

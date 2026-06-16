@@ -112,8 +112,6 @@ Railway's filesystem is **ephemeral** — it resets on every deploy. Any images 
 | Option | Pros | Cons |
 |---|---|---|
 | **Railway Volume** (persistent disk) | Simple, no external service | Not replicated, extra cost, not globally distributed |
-| **AWS S3 / Cloudflare R2** (recommended) | Durable, CDN-ready, scalable | Requires `django-storages` integration + bucket setup |
-| **Cloudinary** | Free tier, image transforms built-in | Vendor lock-in |
 
 ### Recommended: Cloudflare R2 (S3-compatible, free egress)
 
