@@ -201,12 +201,37 @@ class WorkerVarianteCreateSerializer(serializers.ModelSerializer):
         model = ProductoVariantesModel
         fields = ["id", "item", "color", "stock", "activo"]
         read_only_fields = ["id"]
+        extra_kwargs = {
+            "item": {"allow_blank": True, "default": ""},
+        }
 
     def validate_color(self, value):
         producto = self.context["producto"]
         if ProductoVariantesModel.objects.filter(producto=producto, color=value).exists():
             raise serializers.ValidationError(
                 "Ya existe una variante con ese color para este producto."
+            )
+        return value
+
+    def validate_item(self, value):
+        """
+        Reject duplicate non-empty item values within the same product.
+        Empty string is allowed and may repeat (no constraint on item='').
+        Excludes the current instance when updating (pk-based exclusion).
+        """
+        if not value:
+            return value
+
+        producto = self.context["producto"]
+        instance = self.instance
+
+        qs = ProductoVariantesModel.objects.filter(producto=producto, item=value)
+        if instance is not None:
+            qs = qs.exclude(pk=instance.pk)
+
+        if qs.exists():
+            raise serializers.ValidationError(
+                "Este SKU ya está en uso para este producto."
             )
         return value
 
