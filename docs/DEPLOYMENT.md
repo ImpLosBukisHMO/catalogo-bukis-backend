@@ -215,6 +215,68 @@ railway run python manage.py showmigrations
 
 ---
 
+## Seed Staging Database
+
+### Propósito
+
+El comando `seed_staging` crea 8 escenarios de prueba (issue #11) en staging para validar:
+- Precios de variantes (override, fallback, cero)
+- Disponibilidad (stock, activo, kill-switch)
+- Productos sin variantes
+- Items compartidos entre productos
+
+### Comando
+
+```bash
+# Seed básico (agrega datos sin borrar existentes)
+./scripts/seed-staging.sh
+
+# Dry run (ver qué se crearía sin guardar)
+./scripts/seed-staging.sh --dry-run
+
+# Clear + re-seed (elimina datos previos y crea de nuevo)
+./scripts/seed-staging.sh --clear
+```
+
+### Manual (sin script)
+
+```bash
+# Dry run
+railway run python manage.py seed_staging --dry-run
+
+# Seed
+railway run python manage.py seed_staging
+
+# Clear + re-seed
+railway run python manage.py seed_staging --clear
+```
+
+### Verificación
+
+```bash
+# Verificar que hay productos seed
+railway run python manage.py shell -c "
+from api.models import ProductosModel
+print(ProductosModel.objects.filter(nombre__startswith='[SEED]').count())
+"
+
+# Verificar API
+railway run python manage.py shell -c "
+from api.models import ProductosModel
+for p in ProductosModel.objects.filter(nombre__startswith='[SEED]'):
+    print(f'{p.id}: {p.nombre} - ${p.precio}')
+"
+```
+
+### Notas
+
+- **Idempotente**: Correr 2 veces no crea duplicados
+- **Prefijo**: Todos los productos seed tienen `[SEED]` en el nombre
+- **Categoría**: Se crea la categoría `[SEED] Staging`
+- **Colores**: Reutiliza colores existentes si coinciden por hex
+
+---
+
 ## Rollback
 
 ### Rollback de código
