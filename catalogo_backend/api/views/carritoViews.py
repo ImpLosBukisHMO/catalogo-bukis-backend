@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.db.models import F
 import uuid
 
 from rest_framework.decorators import api_view, permission_classes
@@ -10,7 +11,6 @@ from api.models import (
     CarritoModel,
     CarritoItemModel,
     ProductoVariantesModel,
-    ProductosImagenesModel,
     PedidosModel,
     PedidoProductosModel,
 )
@@ -19,6 +19,7 @@ from api.serializers import (
     CarritoItemCreateSerializer,
     CarritoItemUpdateSerializer,
 )
+from api.utils.imagenes import get_variante_imagen
 
 
 def _get_or_create_active_cart(user):
@@ -57,38 +58,40 @@ def carrito_add_item(request):
 
     cart = _get_or_create_active_cart(request.user)
 
-    try:
-        variante = (
-            ProductoVariantesModel.objects.select_related("producto", "color")
-            .get(id=variante_id, activo=True)
-        )
-    except ProductoVariantesModel.DoesNotExist:
-        return Response(
-            {"detail": "Variante no encontrada o inactiva."},
-            status=status.HTTP_404_NOT_FOUND,
-        )
-
-    if variante.stock < cantidad:
-        return Response(
-            {"detail": "No hay stock suficiente para esa variante."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    # upsert por uniq_carrito_variante
-    item, created = CarritoItemModel.objects.get_or_create(
-        carrito=cart,
-        variante=variante,
-        defaults={"cantidad": cantidad},
-    )
-    if not created:
-        nueva = item.cantidad + cantidad
-        if variante.stock < nueva:
+    with transaction.atomic():
+        try:
+            variante = (
+                ProductoVariantesModel.objects.select_related("producto", "color")
+                .select_for_update()
+                .get(id=variante_id, activo=True)
+            )
+        except ProductoVariantesModel.DoesNotExist:
             return Response(
-                {"detail": "No hay stock suficiente para incrementar esa cantidad."},
+                {"detail": "Variante no encontrada o inactiva."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if variante.stock < cantidad:
+            return Response(
+                {"detail": "No hay stock suficiente para esa variante."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        item.cantidad = nueva
-        item.save(update_fields=["cantidad", "updated_at"])
+
+        # upsert por uniq_carrito_variante
+        item, created = CarritoItemModel.objects.get_or_create(
+            carrito=cart,
+            variante=variante,
+            defaults={"cantidad": cantidad},
+        )
+        if not created:
+            nueva = item.cantidad + cantidad
+            if variante.stock < nueva:
+                return Response(
+                    {"detail": "No hay stock suficiente para incrementar esa cantidad."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            item.cantidad = nueva
+            item.save(update_fields=["cantidad", "updated_at"])
 
     return Response({"ok": True, "item_id": item.id}, status=status.HTTP_200_OK)
 
@@ -148,6 +151,31 @@ def carrito_checkout(request):
     direccion_id = request.data.get("direccion_id")  # opcional
 
     with transaction.atomic():
+        # Phase 1: Acquire row-level locks on all variants and validate stock.
+        # Locks are held until the transaction commits/rolls back, preventing
+        # concurrent checkouts on the same rows from interleaving the check+decrement.
+        variant_ids = [it.variante_id for it in items]
+        locked_variants = {
+            v.pk: v
+            for v in ProductoVariantesModel.objects.select_related("producto", "color")
+            .select_for_update()
+            .filter(pk__in=variant_ids)
+        }
+
+        for it in items:
+            v = locked_variants.get(it.variante_id)
+            if v is None:
+                return Response(
+                    {"detail": "Una variante del carrito ya no existe."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if v.stock < it.cantidad:
+                return Response(
+                    {"detail": f"Stock insuficiente para la variante {v.id}."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # Phase 2: All stock checks passed — create the order and decrement stock.
         pedido = PedidosModel.objects.create(
             cliente=request.user,
             clave=str(uuid.uuid4()),
@@ -162,29 +190,14 @@ def carrito_checkout(request):
         subtotal = 0
 
         for it in items:
-            v = it.variante
+            v = locked_variants[it.variante_id]
             p = v.producto
             c = v.color
 
-            precio_unit = p.precio
+            precio_unit = v.precio_efectivo
             subtotal_linea = precio_unit * it.cantidad
 
-            img = (
-                ProductosImagenesModel.objects.filter(variante=v, es_principal=True)
-                .order_by("orden", "id")
-                .first()
-            )
-            if not img:
-                img = (
-                    ProductosImagenesModel.objects.filter(variante=v)
-                    .order_by("orden", "id")
-                    .first()
-                )
-
-            if img:
-                imagen_snapshot = img.imagen.url if hasattr(img.imagen, "url") else str(img.imagen)
-            else:
-                imagen_snapshot = p.imagen.url if hasattr(p.imagen, "url") else str(p.imagen)
+            imagen_snapshot = get_variante_imagen(v)
 
             PedidoProductosModel.objects.create(
                 pedido=pedido,
@@ -206,9 +219,11 @@ def carrito_checkout(request):
 
             subtotal += subtotal_linea
 
-            # opcional: descontar stock
-            v.stock = max(0, v.stock - it.cantidad)
-            v.save(update_fields=["stock", "updated_at"])
+            # Atomic decrement using F() expression — avoids reading a stale
+            # Python value back and keeps the decrement inside the locked row.
+            ProductoVariantesModel.objects.filter(pk=v.pk).update(
+                stock=F("stock") - it.cantidad
+            )
 
         pedido.subtotal_snapshot = subtotal
         pedido.precio_total = subtotal

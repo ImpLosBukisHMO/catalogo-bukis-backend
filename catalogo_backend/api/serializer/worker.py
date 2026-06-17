@@ -8,6 +8,7 @@ from api.models import (
     ColorModel,
     PedidosModel,
 )
+from api.utils.imagenes import get_variante_imagen
 
 # para productos
 class WorkerVariantSerializer(serializers.ModelSerializer):
@@ -37,7 +38,7 @@ class WorkerVariantSerializer(serializers.ModelSerializer):
         return {
             "id": p.id,
             "nombre": p.nombre,
-            "precio": str(p.precio),
+            "precio": str(obj.precio_efectivo),
             "categorias": [c.id for c in p.categorias.all()],
         }
 
@@ -56,22 +57,7 @@ class WorkerVariantSerializer(serializers.ModelSerializer):
     # Imagen principal
     # -------------------------
     def get_imagen_principal(self, obj):
-        # 1. Imagen principal de la variante
-        img = (
-            ProductosImagenesModel.objects
-            .filter(variante=obj, es_principal=True)
-            .first()
-        )
-
-        # 2. Fallback: imagen principal del producto
-        if not img:
-            img = (
-                ProductosImagenesModel.objects
-                .filter(producto=obj.producto, es_principal=True)
-                .first()
-            )
-
-        return img.imagen.url if img else None
+        return get_variante_imagen(obj)
 
 
 # para pedidos
@@ -215,12 +201,37 @@ class WorkerVarianteCreateSerializer(serializers.ModelSerializer):
         model = ProductoVariantesModel
         fields = ["id", "item", "color", "stock", "activo"]
         read_only_fields = ["id"]
+        extra_kwargs = {
+            "item": {"allow_blank": True, "default": ""},
+        }
 
     def validate_color(self, value):
         producto = self.context["producto"]
         if ProductoVariantesModel.objects.filter(producto=producto, color=value).exists():
             raise serializers.ValidationError(
                 "Ya existe una variante con ese color para este producto."
+            )
+        return value
+
+    def validate_item(self, value):
+        """
+        Reject duplicate non-empty item values within the same product.
+        Empty string is allowed and may repeat (no constraint on item='').
+        Excludes the current instance when updating (pk-based exclusion).
+        """
+        if not value:
+            return value
+
+        producto = self.context["producto"]
+        instance = self.instance
+
+        qs = ProductoVariantesModel.objects.filter(producto=producto, item=value)
+        if instance is not None:
+            qs = qs.exclude(pk=instance.pk)
+
+        if qs.exists():
+            raise serializers.ValidationError(
+                "Este SKU ya está en uso para este producto."
             )
         return value
 
