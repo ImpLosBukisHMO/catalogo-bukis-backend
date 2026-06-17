@@ -320,4 +320,88 @@ class SeedScenariosTest(TestCase):
                                      f"{p.nombre}: variante sin stock debería ser no disponible")
                 else:
                     self.assertTrue(self._is_variant_disponible(v),
-                                    f"{p.nombre}: variante activa con stock debería ser disponible")
+                                     f"{p.nombre}: variante activa con stock debería ser disponible")
+
+
+class DemoSeedTest(TestCase):
+    """
+    Verifica que --demo crea 20 productos genéricos con [DEMO] prefix,
+    múltiples categorías, variantes, y que la limpieza funciona.
+    """
+
+    def test_demo_creates_20_products_with_variants(self):
+        """--demo debe crear exactamente 20 productos con variantes."""
+        stdout = StringIO()
+        call_command("seed_staging", "--demo", stdout=stdout, stderr=StringIO())
+
+        demo_products = ProductosModel.objects.filter(nombre__startswith="[DEMO]")
+        self.assertEqual(demo_products.count(), 20,
+                         f"Se esperaban 20 productos demo, hay {demo_products.count()}")
+
+        # Verificar que todos tienen al menos 1 variante
+        for p in demo_products:
+            self.assertGreaterEqual(
+                p.producto_colores.count(), 1,
+                f"{p.nombre}: debería tener al menos 1 variante"
+            )
+
+        # Verificar que hay exactamente 5 categorías demo
+        from api.models import CategoriasModel
+        demo_cats = CategoriasModel.objects.filter(nombre__startswith="[DEMO] ")
+        self.assertEqual(demo_cats.count(), 5,
+                         f"Se esperaban 5 categorías demo, hay {demo_cats.count()}")
+
+    def test_demo_is_idempotent(self):
+        """Correr --demo dos veces no debe duplicar productos."""
+        call_command("seed_staging", "--demo", stdout=StringIO(), stderr=StringIO())
+
+        count_before = ProductosModel.objects.filter(nombre__startswith="[DEMO]").count()
+        self.assertGreater(count_before, 0)
+
+        # Segunda corrida — debe saltar por idempotencia
+        call_command("seed_staging", "--demo", stdout=StringIO(), stderr=StringIO())
+
+        count_after = ProductosModel.objects.filter(nombre__startswith="[DEMO]").count()
+        self.assertEqual(count_before, count_after,
+                         f"Demo seed no es idempotente: antes={count_before}, después={count_after}")
+
+    def test_demo_clear_removes_and_recreates(self):
+        """--demo --clear debe eliminar y re-crear los productos demo."""
+        call_command("seed_staging", "--demo", stdout=StringIO(), stderr=StringIO())
+
+        count_before = ProductosModel.objects.filter(nombre__startswith="[DEMO]").count()
+        self.assertGreater(count_before, 0)
+
+        # Limpiar y re-seedear
+        call_command("seed_staging", "--demo", "--clear", stdout=StringIO(), stderr=StringIO())
+
+        count_after = ProductosModel.objects.filter(nombre__startswith="[DEMO]").count()
+        self.assertEqual(count_after, 20,
+                         f"--demo --clear debería re-crear 20 productos, hay {count_after}")
+
+    def test_demo_dry_run_does_not_persist(self):
+        """--demo --dry-run no debe guardar nada."""
+        # Limpiar primero para asegurar estado conocido
+        ProductosModel.objects.filter(nombre__startswith="[DEMO]").delete()
+
+        call_command("seed_staging", "--demo", "--dry-run", stdout=StringIO(), stderr=StringIO())
+
+        remaining = ProductosModel.objects.filter(nombre__startswith="[DEMO]").count()
+        self.assertEqual(remaining, 0,
+                         f"Dry run no debería persistir productos, pero hay {remaining}")
+
+    def test_demo_does_not_break_test_scenarios(self):
+        """--demo y seed normal deben coexistir sin afectarse."""
+        # Seed normal
+        call_command("seed_staging", stdout=StringIO(), stderr=StringIO())
+
+        # Seed demo
+        call_command("seed_staging", "--demo", stdout=StringIO(), stderr=StringIO())
+
+        demo_count = ProductosModel.objects.filter(nombre__startswith="[DEMO]").count()
+        seed_count = ProductosModel.objects.filter(nombre__startswith="[SEED]").count()
+
+        self.assertGreater(demo_count, 0, "Deberían existir productos demo")
+        self.assertGreater(seed_count, 0, "Deberían existir productos seed")
+        self.assertEqual(demo_count, 20)
+        self.assertEqual(seed_count, 9)
