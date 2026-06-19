@@ -173,6 +173,8 @@ class ProductoVariantesSerializer(serializers.ModelSerializer):
             "producto_id",
             "color",
             "color_id",
+            "item",
+            "precio",
             "stock",
             "activo",
             "disponible",
