@@ -63,7 +63,7 @@ class ProductAvailabilityCurrentBehaviorTest(TestCase):
         response = client.get("/api/productos/")
 
         self.assertEqual(response.status_code, 200, response.data)
-        self.assertNotIn(producto.id, [item["id"] for item in response.data])
+        self.assertNotIn(producto.id, [item["id"] for item in response.data["results"]])
 
     def test_disponible_true_product_appears(self):
         client = APIClient()
@@ -73,7 +73,7 @@ class ProductAvailabilityCurrentBehaviorTest(TestCase):
         response = client.get("/api/productos/")
 
         self.assertEqual(response.status_code, 200, response.data)
-        self.assertIn(producto.id, [item["id"] for item in response.data])
+        self.assertIn(producto.id, [item["id"] for item in response.data["results"]])
 
     def test_disponible_false_returns_404_on_detail(self):
         client = APIClient()
