@@ -2,12 +2,14 @@ from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly
 from rest_framework.exceptions import ValidationError
 from api.models import ProductosModel
+from api.pagination import PublicCatalogPagination
 from api.serializers import ProductosSerializer, ProductoDetalleSerializer
 
 
 class ProductosListCreate(generics.ListCreateAPIView):
     serializer_class = ProductosSerializer
     permission_classes = [AllowAny]
+    pagination_class = PublicCatalogPagination
 
     def _parse_int(self, value, field_name):
         try:

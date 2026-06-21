@@ -1,11 +1,13 @@
 # api/views/productoVariantesViews.py
 from rest_framework import generics
 from api.models import ProductoVariantesModel
+from api.pagination import PublicCatalogPagination
 from api.serializers import ProductoVariantesSerializer
 
 class ProductoVariantesListCreateView(generics.ListCreateAPIView):
     queryset = ProductoVariantesModel.objects.all()
     serializer_class = ProductoVariantesSerializer
+    pagination_class = PublicCatalogPagination
 
     def get_queryset(self):
         qs = ProductoVariantesModel.objects.all().select_related("producto", "color")

@@ -201,7 +201,7 @@ class VarianteOrderingTest(TestCase):
         _create_variant(producto, color_a)
         response = client.get(f"/api/producto-variantes/?producto={producto.id}")
         self.assertEqual(response.status_code, 200, response.data)
-        self.assertEqual([item["color"]["nombre"] for item in response.data], ["Arena", "Turquesa"])
+        self.assertEqual([item["color"]["nombre"] for item in response.data["results"]], ["Arena", "Turquesa"])
 
     def test_worker_variants_endpoint_uses_model_default_ordering(self):
         client = APIClient()
