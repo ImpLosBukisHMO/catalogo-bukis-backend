@@ -21,6 +21,7 @@ def _create_product(
     nombre: str,
     *,
     disponible: bool = True,
+    estado: str = ProductosModel.EstadoProducto.ACTIVE,
     worker: UsuariosModel | None = None,
 ) -> ProductosModel:
     return ProductosModel.objects.create(
@@ -31,6 +32,7 @@ def _create_product(
         peso=Decimal("1.00"),
         medidas="10x10x10",
         disponible=disponible,
+        estado=estado,
         worker=worker,
     )
 

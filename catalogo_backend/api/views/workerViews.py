@@ -140,7 +140,7 @@ class WorkerProductoListCreateView(APIView):
         serializer = WorkerProductoSerializer(data=request.data, context={"request": request})
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        serializer.save(worker=request.user)
+        serializer.save(worker=request.user, estado=ProductosModel.EstadoProducto.DRAFT)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
