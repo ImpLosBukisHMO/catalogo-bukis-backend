@@ -23,6 +23,7 @@ class WorkerVariantSerializer(serializers.ModelSerializer):
         fields = [
             "variant_id",
             "item",
+            "codigo_barras",
             "producto",
             "color",
             "stock",
