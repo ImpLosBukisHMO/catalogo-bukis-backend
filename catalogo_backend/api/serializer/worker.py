@@ -200,10 +200,11 @@ class WorkerProductoSerializer(serializers.ModelSerializer):
 class WorkerVarianteCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductoVariantesModel
-        fields = ["id", "item", "color", "stock", "activo"]
+        fields = ["id", "item", "color", "stock", "activo", "codigo_barras"]
         read_only_fields = ["id"]
         extra_kwargs = {
             "item": {"allow_blank": True, "default": ""},
+            "codigo_barras": {"allow_blank": True, "default": ""},
         }
 
     def validate_color(self, value):

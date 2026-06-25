@@ -169,6 +169,7 @@ class ProductoVariantesSerializer(serializers.ModelSerializer):
         model = ProductoVariantesModel
         fields = [
             "id",
+            "codigo_barras",
             "producto",
             "producto_id",
             "color",
