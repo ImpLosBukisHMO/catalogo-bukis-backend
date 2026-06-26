@@ -5,6 +5,8 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from api.models import (
+    CarritoItemModel,
+    CarritoModel,
     CategoriasModel,
     ColorModel,
     ProductoVariantesModel,
@@ -22,6 +24,17 @@ def _create_worker(email: str = "worker-publication@test.com") -> UsuariosModel:
         telefono="555-7654321",
         password="testpass123",
         staff=True,
+    )
+
+
+def _create_user(email: str = "shopper-publication@test.com") -> UsuariosModel:
+    return UsuariosModel.objects.create_user(
+        nombre="Shopper",
+        apellido="Publication",
+        correo=email,
+        telefono="555-0000000",
+        password="testpass123",
+        staff=False,
     )
 
 
@@ -164,6 +177,30 @@ class ProductPublicationStateTest(TestCase):
         self.assertEqual(list_response.data["results"], [])
         self.assertEqual(detail_response.status_code, 404, detail_response.data)
 
+    def test_public_detail_only_returns_active_variants(self):
+        product = _create_product("Activo con mezcla de variantes", estado=ProductosModel.EstadoProducto.ACTIVE)
+        active_variant = _create_variant(
+            product,
+            color_name="Verde activo",
+            color_hex="#00AA00",
+            item="ACTIVE-SKU",
+            activo=True,
+        )
+        inactive_variant = _create_variant(
+            product,
+            color_name="Rojo inactivo",
+            color_hex="#AA0000",
+            item="INACTIVE-SKU",
+            activo=False,
+        )
+
+        response = self.client.get(f"/api/productos/{product.id}/")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        returned_ids = [item["id"] for item in response.data["variantes"]]
+        self.assertEqual(returned_ids, [active_variant.id])
+        self.assertNotIn(inactive_variant.id, returned_ids)
+
     def test_public_catalog_endpoints_reject_mutations(self):
         producto = _create_product("Solo lectura", estado=ProductosModel.EstadoProducto.ACTIVE)
         variante = _create_variant(producto, color_name="Verde", color_hex="#00FF00")
@@ -246,6 +283,36 @@ class ProductPublicationStateTest(TestCase):
         self.assertEqual(producto.estado, ProductosModel.EstadoProducto.ACTIVE)
         self.assertEqual(response.data["estado"], ProductosModel.EstadoProducto.ACTIVE)
 
+    def test_active_product_patch_still_enforces_publish_validation(self):
+        worker = _create_worker("worker-active-patch@test.com")
+        self.client.force_authenticate(user=worker)
+        category = _create_category("Patch validation")
+        producto = _create_product(
+            "Already active",
+            estado=ProductosModel.EstadoProducto.ACTIVE,
+            worker=worker,
+        )
+        producto.categorias.add(category)
+        variante = _create_variant(
+            producto,
+            color_name="Negro patch",
+            color_hex="#222222",
+            item="PATCH-SKU",
+            stock=4,
+        )
+        _attach_variant_image(producto, variante)
+
+        response = self.client.patch(
+            f"/api/worker/productos/{producto.id}/",
+            {"disponible": False},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn("disponible", response.data)
+        producto.refresh_from_db()
+        self.assertTrue(producto.disponible)
+
     def test_publish_rejects_whitespace_only_sku(self):
         worker = _create_worker("worker-whitespace-sku@test.com")
         self.client.force_authenticate(user=worker)
@@ -277,3 +344,65 @@ class ProductPublicationStateTest(TestCase):
         self.assertIn("item", response.data)
         producto.refresh_from_db()
         self.assertEqual(producto.estado, ProductosModel.EstadoProducto.DRAFT)
+
+
+class CartPublicationGuardsTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = _create_user()
+        self.client.force_authenticate(user=self.user)
+
+    def test_add_to_cart_rejects_variants_from_non_public_products(self):
+        cases = [
+            (ProductosModel.EstadoProducto.DRAFT, True),
+            (ProductosModel.EstadoProducto.ARCHIVED, True),
+            (ProductosModel.EstadoProducto.ACTIVE, False),
+        ]
+
+        for index, (estado, disponible) in enumerate(cases, start=1):
+            product = _create_product(
+                f"Hidden product {index}",
+                estado=estado,
+                disponible=disponible,
+            )
+            variant = _create_variant(
+                product,
+                color_name=f"Color hidden {index}",
+                color_hex=f"#AA0{index}0{index}",
+                item=f"HIDDEN-{index}",
+            )
+
+            response = self.client.post(
+                "/api/carrito/items/",
+                {"variante_id": variant.id, "cantidad": 1},
+                format="json",
+            )
+
+            self.assertEqual(response.status_code, 400, response.data)
+            self.assertIn("no está disponible para la venta pública", response.data["detail"])
+
+        self.assertEqual(CarritoItemModel.objects.count(), 0)
+
+    def test_checkout_rejects_cart_items_when_product_is_no_longer_public(self):
+        product = _create_product(
+            "Was public",
+            estado=ProductosModel.EstadoProducto.ACTIVE,
+            disponible=True,
+        )
+        variant = _create_variant(
+            product,
+            color_name="Negro checkout",
+            color_hex="#111111",
+            item="CHECKOUT-SKU",
+            stock=3,
+        )
+        cart = CarritoModel.objects.create(cliente=self.user, estado="ACTIVE")
+        CarritoItemModel.objects.create(carrito=cart, variante=variant, cantidad=1)
+        product.estado = ProductosModel.EstadoProducto.ARCHIVED
+        product.save(update_fields=["estado", "updated_at"])
+
+        response = self.client.post("/api/carrito/checkout/", {}, format="json")
+
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn("ya no está disponible para la venta pública", response.data["detail"])
+        self.assertEqual(CarritoItemModel.objects.filter(carrito=cart).count(), 1)

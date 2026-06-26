@@ -32,6 +32,15 @@ def _get_or_create_active_cart(user):
     return cart
 
 
+def _is_public_product_variant(variante):
+    producto = variante.producto
+    return (
+        variante.activo
+        and producto.estado == producto.EstadoProducto.ACTIVE
+        and producto.disponible is True
+    )
+
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def carrito_actual(request):
@@ -69,6 +78,12 @@ def carrito_add_item(request):
             return Response(
                 {"detail": "Variante no encontrada o inactiva."},
                 status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not _is_public_product_variant(variante):
+            return Response(
+                {"detail": "La variante no está disponible para la venta pública."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         if variante.stock < cantidad:
@@ -167,6 +182,11 @@ def carrito_checkout(request):
             if v is None:
                 return Response(
                     {"detail": "Una variante del carrito ya no existe."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if not _is_public_product_variant(v):
+                return Response(
+                    {"detail": f"La variante {v.id} ya no está disponible para la venta pública."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             if v.stock < it.cantidad:

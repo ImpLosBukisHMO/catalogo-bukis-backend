@@ -168,6 +168,11 @@ class ProductosModel(models.Model):
         errors = {}
         active_variants = self._active_variants_queryset()
 
+        if not self.disponible:
+            errors["disponible"] = [
+                "El producto debe estar disponible para publicarse."
+            ]
+
         if not self.categorias.exists():
             errors["categorias"] = [
                 "El producto debe tener al menos una categoría para publicarse."

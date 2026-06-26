@@ -90,7 +90,12 @@ class ProductAvailabilityCurrentBehaviorTest(TestCase):
         client = APIClient()
         worker = _create_user("worker-availability@test.com", staff=True)
         client.force_authenticate(user=worker)
-        producto = _create_product("Worker Hidden", disponible=False, worker=worker)
+        producto = _create_product(
+            "Worker Hidden",
+            disponible=False,
+            estado=ProductosModel.EstadoProducto.DRAFT,
+            worker=worker,
+        )
         _create_variant(producto, _create_color("Negro availability", "#111111"), stock=3)
 
         response = client.patch(

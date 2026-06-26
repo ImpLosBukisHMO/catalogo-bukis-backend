@@ -203,13 +203,7 @@ class WorkerProductoSerializer(serializers.ModelSerializer):
         target_estado = attrs.get("estado", getattr(instance, "estado", ProductosModel.EstadoProducto.DRAFT))
         categorias = attrs.get("categorias")
 
-        is_publish_transition = (
-            target_estado == ProductosModel.EstadoProducto.ACTIVE
-            and attrs.get("estado") == ProductosModel.EstadoProducto.ACTIVE
-            and getattr(instance, "estado", None) != ProductosModel.EstadoProducto.ACTIVE
-        )
-
-        if not is_publish_transition:
+        if target_estado != ProductosModel.EstadoProducto.ACTIVE:
             return attrs
 
         producto = instance or ProductosModel(
