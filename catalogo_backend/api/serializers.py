@@ -169,6 +169,7 @@ class ProductoVariantesSerializer(serializers.ModelSerializer):
         model = ProductoVariantesModel
         fields = [
             "id",
+            "codigo_barras",
             "producto",
             "producto_id",
             "color",
@@ -195,7 +196,7 @@ class ProductoVariantesEnProductoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ProductoVariantesModel
-        fields = ["id", "item", "color", "precio", "stock", "activo", "disponible", "created_at", "updated_at"]
+        fields = ["id", "item", "codigo_barras", "color", "precio", "stock", "activo", "disponible", "created_at", "updated_at"]
 
     def get_disponible(self, obj):
         return obj.activo and obj.stock > 0
