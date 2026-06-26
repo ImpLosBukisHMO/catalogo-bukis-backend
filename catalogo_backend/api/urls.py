@@ -19,6 +19,7 @@ from api.views.workerViews import (
     WorkerProductoListCreateView,
     WorkerProductoUpdateView,
     WorkerVarianteCreateView,
+    WorkerVarianteDetailView,
     WorkerImagenCreateView,
 )
 from api.views.usuariosViews import MiUsuarioView
@@ -95,6 +96,7 @@ urlpatterns = [
 
     # Worker - variantes (existente)
     path("worker/variants/", WorkerVariantListView.as_view(), name="worker-variants"),
+    path("worker/variants/<int:id>/", WorkerVarianteDetailView.as_view(), name="worker-variant-detail"),
 
     # Worker - pedidos
     path("worker/pedidos/", WorkerPedidoListView.as_view(), name="worker-pedidos"),

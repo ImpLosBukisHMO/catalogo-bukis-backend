@@ -17,6 +17,7 @@ from api.serializer.worker import (
     WorkerCambiarEstadoSerializer,
     WorkerProductoSerializer,
     WorkerVarianteCreateSerializer,
+    WorkerVarianteUpdateSerializer,
     WorkerImagenCreateSerializer,
 )
 
@@ -196,6 +197,44 @@ class WorkerVarianteCreateView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         serializer.save(producto=producto)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+
+# =========================
+# WORKER - VER / EDITAR VARIANTE PROPIA
+# =========================
+class WorkerVarianteDetailView(APIView):
+    permission_classes = [IsAuthenticated, IsWorker]
+
+    def _get_variante_propia(self, request, variante_id):
+        """Devuelve la variante solo si su producto pertenece al worker autenticado."""
+        try:
+            return ProductoVariantesModel.objects.select_related("producto", "color").get(
+                pk=variante_id,
+                producto__worker=request.user,
+            )
+        except ProductoVariantesModel.DoesNotExist:
+            return None
+
+    def get(self, request, id):
+        variante = self._get_variante_propia(request, id)
+        if not variante:
+            return Response({"error": "Variante no encontrada."}, status=status.HTTP_404_NOT_FOUND)
+        from api.serializer.worker import WorkerVariantSerializer
+        serializer = WorkerVariantSerializer(variante)
+        return Response(serializer.data)
+
+    def patch(self, request, id):
+        variante = self._get_variante_propia(request, id)
+        if not variante:
+            return Response({"error": "Variante no encontrada."}, status=status.HTTP_404_NOT_FOUND)
+        serializer = WorkerVarianteUpdateSerializer(
+            variante, data=request.data, partial=True
+        )
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(serializer.data)
 
 
 # =========================

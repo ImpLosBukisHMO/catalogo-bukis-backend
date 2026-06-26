@@ -308,3 +308,23 @@ class WorkerImagenCreateSerializer(serializers.ModelSerializer):
         model = ProductosImagenesModel
         fields = ["id", "variante", "imagen", "orden", "es_principal"]
         read_only_fields = ["id"]
+
+
+# =========================
+# WORKER - VARIANTE (editar: stock, item, precio, activo, codigo_barras)
+# =========================
+class WorkerVarianteUpdateSerializer(serializers.ModelSerializer):
+    """Serializer para PATCH de una variante existente del worker.
+    Solo permite actualizar campos de negocio; color y producto son inmutables.
+    """
+    class Meta:
+        model = ProductoVariantesModel
+        fields = ["id", "item", "stock", "activo", "precio", "codigo_barras"]
+        read_only_fields = ["id"]
+        extra_kwargs = {
+            "item": {"allow_blank": True},
+            "codigo_barras": {"allow_blank": True},
+            "stock": {"required": False},
+            "activo": {"required": False},
+            "precio": {"required": False, "allow_null": True},
+        }
