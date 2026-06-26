@@ -43,6 +43,7 @@ def _create_product(nombre: str, imagen: str = "img/products/default.jpg") -> Pr
         peso="1.00",
         medidas="10x10x10",
         disponible=True,
+        estado=ProductosModel.EstadoProducto.ACTIVE,
     )
 
 def _create_color(nombre: str, hex_value: str) -> ColorModel:

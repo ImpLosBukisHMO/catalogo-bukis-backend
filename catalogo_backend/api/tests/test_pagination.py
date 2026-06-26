@@ -15,6 +15,7 @@ def _create_product(nombre: str, *, disponible: bool = True) -> ProductosModel:
         peso=Decimal("1.00"),
         medidas="10x10x10",
         disponible=disponible,
+        estado=ProductosModel.EstadoProducto.ACTIVE,
     )
 
 

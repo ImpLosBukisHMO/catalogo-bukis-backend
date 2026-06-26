@@ -185,12 +185,59 @@ class WorkerProductoSerializer(serializers.ModelSerializer):
             "medidas",
             "capacidad",
             "disponible",
+            "estado",
             "categorias",
             "categorias_ids",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+    def validate_estado(self, value):
+        if self.instance is None:
+            return ProductosModel.EstadoProducto.DRAFT
+        return value
+
+    def validate(self, attrs):
+        instance = self.instance
+        target_estado = attrs.get("estado", getattr(instance, "estado", ProductosModel.EstadoProducto.DRAFT))
+        categorias = attrs.get("categorias")
+
+        if target_estado != ProductosModel.EstadoProducto.ACTIVE:
+            return attrs
+
+        producto = instance or ProductosModel(
+            worker=self.context.get("request").user if self.context.get("request") else None,
+            nombre=attrs.get("nombre", ""),
+            imagen=attrs.get("imagen") or "img/products/default.jpg",
+            descripcion=attrs.get("descripcion", ""),
+            precio=attrs.get("precio", 0),
+            peso=attrs.get("peso", 0),
+            medidas=attrs.get("medidas", ""),
+            capacidad=attrs.get("capacidad"),
+            disponible=attrs.get("disponible", True),
+            estado=target_estado,
+        )
+
+        if instance is not None:
+            for field, value in attrs.items():
+                if field == "categorias":
+                    continue
+                setattr(producto, field, value)
+
+        errors = producto.get_publish_validation_errors()
+        if categorias is not None and len(categorias) > 0:
+            errors.pop("categorias", None)
+
+        if categorias is not None and len(categorias) == 0:
+            errors["categorias"] = [
+                "El producto debe tener al menos una categoría para publicarse."
+            ]
+
+        if errors:
+            raise serializers.ValidationError(errors)
+
+        return attrs
 
 
 # =========================

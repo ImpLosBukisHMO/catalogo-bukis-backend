@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.validators import RegexValidator
@@ -117,6 +118,11 @@ class CategoriasModel(models.Model):
 
 # Productos.
 class ProductosModel(models.Model):
+    class EstadoProducto(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        ACTIVE = "active", "Active"
+        ARCHIVED = "archived", "Archived"
+
     nombre = models.CharField(max_length=100, null=False)
     imagen = models.ImageField(upload_to=get_product_image_path, null=False)
     descripcion = models.TextField(default="")
@@ -125,6 +131,12 @@ class ProductosModel(models.Model):
     medidas = models.TextField(null=False)
     capacidad = models.CharField(max_length=50, null=True, blank=True)
     disponible = models.BooleanField(default=True)
+    estado = models.CharField(
+        max_length=20,
+        choices=EstadoProducto.choices,
+        default=EstadoProducto.DRAFT,
+        db_index=True,
+    )
     categorias = models.ManyToManyField(
         CategoriasModel,
         related_name="productos",
@@ -144,6 +156,82 @@ class ProductosModel(models.Model):
 
     def __str__(self):
         return self.nombre
+
+    def _active_variants_queryset(self):
+        return self.producto_colores.filter(activo=True)
+
+    @staticmethod
+    def _has_non_blank_sku(value):
+        return bool((value or "").strip())
+
+    def get_publish_validation_errors(self):
+        errors = {}
+        active_variants = self._active_variants_queryset()
+
+        if not self.disponible:
+            errors["disponible"] = [
+                "El producto debe estar disponible para publicarse."
+            ]
+
+        if not self.categorias.exists():
+            errors["categorias"] = [
+                "El producto debe tener al menos una categoría para publicarse."
+            ]
+
+        if not active_variants.exists():
+            errors["variantes"] = [
+                "El producto debe tener al menos una variante activa para publicarse."
+            ]
+
+        has_valid_sku = any(
+            self._has_non_blank_sku(variant.item)
+            for variant in active_variants.only("item")
+        )
+        if not has_valid_sku:
+            errors["item"] = [
+                "Al menos una variante activa debe tener un SKU válido para publicarse."
+            ]
+
+        publishable_variants = []
+        for variant in active_variants.prefetch_related("imagenes"):
+            has_valid_price = variant.precio_efectivo is not None and variant.precio_efectivo > 0
+            has_valid_stock = variant.stock > 0
+            has_variant_image = variant.imagenes.exists()
+
+            if (
+                has_valid_price
+                and has_valid_stock
+                and has_variant_image
+                and self._has_non_blank_sku(variant.item)
+            ):
+                publishable_variants.append(variant.id)
+
+        if not active_variants.filter(precio__gt=0).exists() and self.precio <= 0:
+            errors["precio"] = [
+                "Al menos una variante activa debe tener un precio válido para publicarse."
+            ]
+
+        if not active_variants.filter(stock__gt=0).exists():
+            errors["stock"] = [
+                "Al menos una variante activa debe tener stock válido para publicarse."
+            ]
+
+        if not active_variants.filter(imagenes__isnull=False).exists():
+            errors["imagenes"] = [
+                "Al menos una variante activa debe tener una imagen principal o utilizable para publicarse."
+            ]
+
+        if not publishable_variants and "variantes" not in errors:
+            errors.setdefault("estado", []).append(
+                "El producto debe tener al menos una variante activa y publicable."
+            )
+
+        return errors
+
+    def validate_can_publish(self):
+        errors = self.get_publish_validation_errors()
+        if errors:
+            raise ValidationError(errors)
 
 
 # Colores.
