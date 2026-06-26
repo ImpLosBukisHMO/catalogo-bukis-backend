@@ -213,7 +213,7 @@ class ProductoDetalleSerializer(ProductosSerializer):
         fields = ProductosSerializer.Meta.fields + ["variantes"]
 
     def get_variantes(self, obj):
-        qs = ProductoVariantesModel.objects.filter(producto=obj).select_related("color", "producto")
+        qs = ProductoVariantesModel.objects.filter(producto=obj, activo=True).select_related("color", "producto")
         return ProductoVariantesEnProductoSerializer(qs, many=True).data
 
 
