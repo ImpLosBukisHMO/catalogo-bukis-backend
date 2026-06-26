@@ -263,7 +263,7 @@ class ProductoVariantesModel(models.Model):
     )
 
     item = models.CharField(max_length=50, null=False, default="")
-    codigo_barras = models.CharField(max_length=30, null=False, default="")
+    codigo_barras = models.CharField(max_length=30, null=False, blank=True, default="")
     precio = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     stock = models.PositiveIntegerField(default=0)
     activo = models.BooleanField(default=True)
@@ -422,9 +422,6 @@ class PedidosModel(models.Model):
 
     # Nuevo: id público estable y único para APIs / UI
     public_id = models.UUIDField(default=uuid.uuid4, editable=False, null=True, blank=True)
-
-    # Código de barras del pedido (puede ser escaneado por el worker)
-    codigo_barras = models.CharField(max_length=20, null=True, blank=True)
 
     estado = models.CharField(
         max_length=20,

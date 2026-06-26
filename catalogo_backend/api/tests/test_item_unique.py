@@ -191,7 +191,12 @@ class WorkerFormItemValidationTest(TestCase):
         # Create first variant successfully
         resp = self.client.post(
             self.url,
-            {"item": "WORKER-SKU-001", "color": self.color1.id, "stock": 5},
+            {
+                "item": "WORKER-SKU-001",
+                "color": self.color1.id,
+                "stock": 5,
+                "codigo_barras": "7501234567890",
+            },
             format="json",
         )
         self.assertEqual(resp.status_code, 201, resp.data)
@@ -199,7 +204,12 @@ class WorkerFormItemValidationTest(TestCase):
         # Attempt to create second variant with same item → must get 400 with 'item' key
         resp2 = self.client.post(
             self.url,
-            {"item": "WORKER-SKU-001", "color": self.color2.id, "stock": 3},
+            {
+                "item": "WORKER-SKU-001",
+                "color": self.color2.id,
+                "stock": 3,
+                "codigo_barras": "7501234567891",
+            },
             format="json",
         )
         self.assertEqual(resp2.status_code, 400, resp2.data)
@@ -212,7 +222,12 @@ class WorkerFormItemValidationTest(TestCase):
         """
         resp1 = self.client.post(
             self.url,
-            {"item": "", "color": self.color1.id, "stock": 5},
+            {
+                "item": "",
+                "color": self.color1.id,
+                "stock": 5,
+                "codigo_barras": "7501234567892",
+            },
             format="json",
         )
         # If this returns 400 with 'item: blank not allowed', the serializer needs
@@ -221,7 +236,12 @@ class WorkerFormItemValidationTest(TestCase):
 
         resp2 = self.client.post(
             self.url,
-            {"item": "", "color": self.color2.id, "stock": 3},
+            {
+                "item": "",
+                "color": self.color2.id,
+                "stock": 3,
+                "codigo_barras": "7501234567893",
+            },
             format="json",
         )
         self.assertEqual(resp2.status_code, 201, f"Expected 201, got 400: {resp2.data}")
@@ -236,14 +256,24 @@ class WorkerFormItemValidationTest(TestCase):
 
         resp1 = self.client.post(
             self.url,
-            {"item": "CROSS-SKU", "color": self.color1.id, "stock": 5},
+            {
+                "item": "CROSS-SKU",
+                "color": self.color1.id,
+                "stock": 5,
+                "codigo_barras": "7501234567894",
+            },
             format="json",
         )
         self.assertEqual(resp1.status_code, 201, resp1.data)
 
         resp2 = self.client.post(
             other_url,
-            {"item": "CROSS-SKU", "color": color4.id, "stock": 3},
+            {
+                "item": "CROSS-SKU",
+                "color": color4.id,
+                "stock": 3,
+                "codigo_barras": "7501234567895",
+            },
             format="json",
         )
         self.assertEqual(resp2.status_code, 201, resp2.data)

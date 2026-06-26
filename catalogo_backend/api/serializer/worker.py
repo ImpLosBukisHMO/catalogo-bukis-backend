@@ -251,7 +251,15 @@ class WorkerVarianteCreateSerializer(serializers.ModelSerializer):
         read_only_fields = ["id"]
         extra_kwargs = {
             "item": {"allow_blank": True, "default": ""},
-            "codigo_barras": {"allow_blank": True, "default": ""},
+            "codigo_barras": {
+                "allow_blank": False,
+                "required": True,
+                "trim_whitespace": True,
+                "error_messages": {
+                    "blank": "El código de barras es obligatorio para nuevas variantes.",
+                    "required": "El código de barras es obligatorio para nuevas variantes.",
+                },
+            },
         }
 
     def validate_color(self, value):
@@ -281,6 +289,13 @@ class WorkerVarianteCreateSerializer(serializers.ModelSerializer):
         if qs.exists():
             raise serializers.ValidationError(
                 "Este SKU ya está en uso para este producto."
+            )
+        return value
+
+    def validate_codigo_barras(self, value):
+        if not value.strip():
+            raise serializers.ValidationError(
+                "El código de barras es obligatorio para nuevas variantes."
             )
         return value
 
