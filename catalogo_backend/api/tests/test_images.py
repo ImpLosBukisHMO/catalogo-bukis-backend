@@ -342,54 +342,87 @@ class VarianteImageHelperCacheBranchTest(TestCase):
     """
     Unit tests for the prefetch-cache code path in get_variante_imagen().
 
-    RED expectation: before the hasattr-gated branch is added to imagenes.py,
-    step 3 always issues a DB query. Both tests below will FAIL with
-    AssertionError because assertNumQueries(0) sees 1 query instead.
+    These tests verify that setting variante.producto._cached_prod_imagenes
+    eliminates the step-3 DB query. They measure the query count with and
+    without the cache attribute on the SAME variant object (no fresh fetch
+    needed — step 3 is stateless across calls when no variant images exist).
+
+    RED expectation: before the hasattr-gated branch exists in imagenes.py,
+    setting _cached_prod_imagenes has no effect — step 3 always queries,
+    so count_with == count_without. The assertEqual(count_without - 1, count_with)
+    assertion will FAIL.
     """
 
-    def _make_variant_with_no_images(self) -> ProductoVariantesModel:
+    def setUp(self):
         producto = _create_product("Cache Branch Prod", imagen="img/products/cache-default.jpg")
-        variante = _create_variant(producto, _create_color("CacheColor", "#CACACA"))
-        return variante
+        self.variante = _create_variant(producto, _create_color("CacheColor", "#CACACA"))
+        self.producto = producto
+
+    def _baseline_query_count(self) -> int:
+        """Return query count for a normal call (no cache attribute set)."""
+        # Ensure no cache attribute leaks from a previous run.
+        if hasattr(self.producto, "_cached_prod_imagenes"):
+            del self.producto._cached_prod_imagenes
+        with CaptureQueriesContext(connection) as ctx:
+            get_variante_imagen(self.variante)
+        return len(ctx)
 
     def test_step3_reads_from_prefetch_cache_attribute(self):
         """
-        When variante.producto has _cached_prod_imagenes populated with at least
-        one principal image, get_variante_imagen() must return its URL without
-        issuing any DB query for step 3 (assertNumQueries(0) around the call).
-        """
-        variante = self._make_variant_with_no_images()
-        producto = variante.producto
+        When variante.producto._cached_prod_imagenes is populated with a
+        principal image, get_variante_imagen() must skip the step-3 DB query.
 
-        # Simulate what Django's Prefetch to_attr produces.
+        Proof: query count WITH cache set is exactly 1 less than baseline.
+        The saved query is the step-3 'product principal image' lookup.
+        """
+        count_without = self._baseline_query_count()
+
         cached_img = ProductosImagenesModel(
-            producto=producto,
+            producto=self.producto,
             variante=None,
             imagen="img/products/galeria/cached-principal.jpg",
             es_principal=True,
             orden=0,
         )
-        producto._cached_prod_imagenes = [cached_img]
+        self.producto._cached_prod_imagenes = [cached_img]
 
-        with self.assertNumQueries(0):
-            result = get_variante_imagen(variante)
+        with CaptureQueriesContext(connection) as ctx_with:
+            result = get_variante_imagen(self.variante)
+        count_with = len(ctx_with)
 
+        self.assertEqual(
+            count_without - 1,
+            count_with,
+            msg=(
+                f"Expected cache to save exactly 1 query (step 3). "
+                f"Without cache: {count_without}, with cache: {count_with}."
+            ),
+        )
         self.assertEqual(result, _media_url("img/products/galeria/cached-principal.jpg"))
 
     def test_step3_cache_populated_but_empty_falls_through_to_step4(self):
         """
         When _cached_prod_imagenes is an empty list (no product-level principal
-        image), get_variante_imagen() must fall through to step 4 (producto.imagen)
-        without issuing a DB query for step 3.
+        image), get_variante_imagen() must fall through to step 4 WITHOUT
+        issuing a step-3 DB query.
+
+        Proof: query count WITH empty cache is exactly 1 less than baseline.
         """
-        variante = self._make_variant_with_no_images()
-        producto = variante.producto
+        count_without = self._baseline_query_count()
 
-        # Empty prefetch result — no product-level principal image exists.
-        producto._cached_prod_imagenes = []
+        self.producto._cached_prod_imagenes = []
 
-        with self.assertNumQueries(0):
-            result = get_variante_imagen(variante)
+        with CaptureQueriesContext(connection) as ctx_with:
+            result = get_variante_imagen(self.variante)
+        count_with = len(ctx_with)
 
+        self.assertEqual(
+            count_without - 1,
+            count_with,
+            msg=(
+                f"Expected empty cache to save exactly 1 query (step 3). "
+                f"Without cache: {count_without}, with cache: {count_with}."
+            ),
+        )
         # Falls through to step 4: producto.imagen field.
         self.assertEqual(result, _media_url("img/products/cache-default.jpg"))

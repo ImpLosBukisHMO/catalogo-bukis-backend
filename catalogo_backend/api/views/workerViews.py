@@ -1,3 +1,5 @@
+from django.db.models import Prefetch
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -32,7 +34,21 @@ class WorkerVariantListView(APIView):
         qs = (
             ProductoVariantesModel.objects
             .select_related("producto", "color")
-            .prefetch_related("producto__categorias")
+            .prefetch_related(
+                "producto__categorias",
+                Prefetch(
+                    "imagenes",
+                    queryset=ProductosImagenesModel.objects.order_by("orden", "id"),
+                    to_attr="_cached_variante_imagenes",
+                ),
+                Prefetch(
+                    "producto__imagenes",
+                    queryset=ProductosImagenesModel.objects
+                        .filter(variante__isnull=True)
+                        .order_by("orden", "id"),
+                    to_attr="_cached_prod_imagenes",
+                ),
+            )
         )
 
         serializer = WorkerVariantSerializer(qs, many=True)
