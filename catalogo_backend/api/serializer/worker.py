@@ -328,3 +328,16 @@ class WorkerVarianteUpdateSerializer(serializers.ModelSerializer):
             "activo": {"required": False},
             "precio": {"required": False, "allow_null": True},
         }
+    
+    def validate_item(self, value):
+        if not value or value.strip() == "": return value
+        instance = self.instance
+
+        if instance:
+            product = instance.producto
+            is_duplicated = ProductoVariantesModel.objects.filter(producto=product, item=value).exclude(pk=instance.pk).exists()
+            
+            if is_duplicated:
+                raise serializers.ValidationError("There\'s already a variant with the same item/SKU code.")
+            
+        return value

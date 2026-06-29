@@ -37,8 +37,6 @@ def _create_color(nombre: str, hex_value: str) -> ColorModel:
 
 
 class WorkerVariantUpdateTest(TestCase):
-    """Tests para el endpoint privado PATCH /api/worker/variants/<id>/"""
-
     def setUp(self):
         self.worker = _create_worker()
         self.other_worker = _create_worker("worker-other@test.com")
@@ -56,9 +54,6 @@ class WorkerVariantUpdateTest(TestCase):
         self.client.force_authenticate(user=self.worker)
         self.url = f"/api/worker/variants/{self.variante.id}/"
 
-    # ------------------------------------------------------------------
-    # 1️⃣ PATCH exitoso — actualizar stock, activo, item y codigo_barras
-    # ------------------------------------------------------------------
     def test_worker_updates_own_variant(self):
         payload = {
             "stock": 5,
@@ -67,55 +62,91 @@ class WorkerVariantUpdateTest(TestCase):
             "codigo_barras": "M012754G3523A4",
         }
         resp = self.client.patch(self.url, payload, format="json")
-
         self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
         data = resp.json()
 
-        # Verificar respuesta
+        # Verify response
         self.assertEqual(data["stock"], 5)
         self.assertFalse(data["activo"])
         self.assertEqual(data["item"], "UPD-SKU-002")
         self.assertEqual(data["codigo_barras"], "M012754G3523A4")
 
-        # Verificar en la base de datos
+        # Verify from DB
         self.variante.refresh_from_db()
         self.assertEqual(self.variante.stock, 5)
         self.assertFalse(self.variante.activo)
         self.assertEqual(self.variante.item, "UPD-SKU-002")
         self.assertEqual(self.variante.codigo_barras, "M012754G3523A4")
 
-    # ------------------------------------------------------------------
-    # 2️⃣ Intento de editar variante de otro worker → 404 (no encontrada)
-    # ------------------------------------------------------------------
     def test_worker_cannot_edit_variant_of_other_worker(self):
         client = APIClient()
         client.force_authenticate(user=self.other_worker)
-
         resp = client.patch(self.url, {"stock": 1}, format="json")
-
-        # La vista filtra por producto__worker=request.user, así que la
-        # variante simplemente "no existe" para el otro worker → 404.
         self.assertIn(resp.status_code, [status.HTTP_404_NOT_FOUND, status.HTTP_403_FORBIDDEN])
 
-    # ------------------------------------------------------------------
-    # 3️⃣ Edición solo de codigo_barras (campo aislado)
-    # ------------------------------------------------------------------
     def test_worker_can_update_only_codigo_barras(self):
         resp = self.client.patch(self.url, {"codigo_barras": "ONLYCODE999"}, format="json")
-
         self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
         self.assertEqual(resp.json()["codigo_barras"], "ONLYCODE999")
-
         self.variante.refresh_from_db()
         self.assertEqual(self.variante.codigo_barras, "ONLYCODE999")
 
-    # ------------------------------------------------------------------
-    # 4️⃣ GET de variante propia funciona
-    # ------------------------------------------------------------------
     def test_worker_can_get_own_variant(self):
         resp = self.client.get(self.url)
-
         self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+    
+    def test_worker_cannot_update_sku_to_duplicate_variant(self):
+        color = _create_color("Azul 2", "#0032D6")
+        variant = ProductoVariantesModel.objects.create(
+            producto = self.producto,
+            color = color,
+            item = "SKU2345BL",
+            codigo_barras = "",
+            stock = 2,
+            activo = True
+        )
+        update_payload = {"item": "SKU2345BL"}
+        res = self.client.patch(self.url, update_payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST, res.data)
+        self.assertIn("item", res.data)
+        self.variante.refresh_from_db()
+        self.assertEqual(self.variante.item, "UPD-SKU-001")
+
+    def test_worker_update_other_fields_with_same_sku(self):
+        update_payload = {
+            "item": "UPD-SKU-001",
+            "stock": 120
+        }
+        res = self.client.patch(self.url, update_payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_200_OK, res.data)
+        self.variante.refresh_from_db()
+        self.assertEqual(self.variante.item, "UPD-SKU-001")
+        self.assertEqual(self.variante.stock, 120)
+    
+    def test_worker_multiple_variants_with_blank_sku(self):
+        # Current variant
+        res_1 = self.client.patch(self.url, {"item": ""}, format="json")
+        self.assertEqual(res_1.status_code, status.HTTP_200_OK, res_1.data)
+
+        # Another variant with blank SKU.
+        v2_color = _create_color("Rojo 2", "#EC1B1B")
+        v2 = ProductoVariantesModel.objects.create(
+            producto = self.producto,
+            color = v2_color,
+            item = "",
+            codigo_barras = "",
+            stock = 20,
+            activo = True
+        )
+        v2_url = f"/api/worker/variants/{v2.id}/"
+        res_2 = self.client.patch(v2_url, {"item": ""}, format="json")
+        
+        # Collision avoided: UniqueConstraint allows blank fields.
+        self.assertEqual(res_2.status_code, status.HTTP_200_OK, res_2.data)
+        self.variante.refresh_from_db()
+        v2.refresh_from_db()
+        self.assertEqual(self.variante.item, "")
+        self.assertEqual(v2.item, "")
 
 
 class PublicVariantEndpointReadOnlyTest(TestCase):
