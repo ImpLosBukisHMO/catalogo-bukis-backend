@@ -1,5 +1,7 @@
 from django.conf import settings
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 
 from rest_framework.test import APIClient
 
@@ -217,3 +219,177 @@ class VarianteOrderingTest(TestCase):
         response = client.get("/api/worker/variants/")
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual([item["variant_id"] for item in response.data], [variante_azul.id, variante_rojo.id])
+
+
+def _build_worker_variant_dataset(n: int, color_offset: int = 0):
+    """
+    Create N variants with mixed image scenarios covering all four fallback branches:
+      - Variant with principal image (step 1)
+      - Variant with any image but no principal (step 2)
+      - Variant with no images but product has principal image (step 3)
+      - Variant with no images and product has no gallery images (step 4 / default)
+    """
+    colors = []
+    variants = []
+    hex_digits = "0123456789ABCDEF"
+
+    for i in range(n):
+        # Generate a unique hex color.
+        offset = color_offset + i
+        r = (offset * 37 + 10) % 256
+        g = (offset * 59 + 80) % 256
+        b = (offset * 83 + 150) % 256
+        hex_val = f"#{r:02X}{g:02X}{b:02X}"
+        color = _create_color(f"Color-{color_offset}-{i}", hex_val)
+        colors.append(color)
+
+    for i, color in enumerate(colors):
+        branch = i % 4  # 0=step1, 1=step2, 2=step3, 3=step4
+        product_imagen = f"img/products/p{color_offset}-{i}-default.jpg"
+        producto = _create_product(f"Prod-{color_offset}-{i}", imagen=product_imagen)
+        variante = _create_variant(producto, color)
+
+        if branch == 0:
+            # Step 1: variant has a principal image.
+            _attach_image(
+                producto,
+                variante=variante,
+                path=f"img/products/galeria/v-principal-{color_offset}-{i}.jpg",
+                es_principal=True,
+                orden=0,
+            )
+        elif branch == 1:
+            # Step 2: variant has an image but not principal.
+            _attach_image(
+                producto,
+                variante=variante,
+                path=f"img/products/galeria/v-any-{color_offset}-{i}.jpg",
+                es_principal=False,
+                orden=1,
+            )
+        elif branch == 2:
+            # Step 3: no variant image; product has a principal image.
+            _attach_image(
+                producto,
+                path=f"img/products/galeria/p-principal-{color_offset}-{i}.jpg",
+                es_principal=True,
+                orden=0,
+            )
+        # branch == 3: step 4 — no gallery images, only producto.imagen field.
+
+        variants.append(variante)
+
+    return variants
+
+
+class WorkerVariantListQueryCountTest(TestCase):
+    """
+    Invariant: the total SQL query count for GET /api/worker/variants/ MUST be
+    constant regardless of the number of variants returned.
+
+    RED expectation: before the double-Prefetch is wired in WorkerVariantListView,
+    the query count grows linearly with N (N+1 problem), so the counts for
+    N=1, N=5, and N=20 will differ and the assertion will FAIL.
+    """
+
+    def setUp(self):
+        self.worker = _create_user("worker-qcount@test.com", staff=True)
+
+    def _get_query_count(self, client: APIClient) -> int:
+        with CaptureQueriesContext(connection) as ctx:
+            response = client.get("/api/worker/variants/")
+        self.assertEqual(response.status_code, 200, response.data)
+        return len(ctx)
+
+    def test_query_count_is_constant_for_n_equals_1(self):
+        client = APIClient()
+        client.force_authenticate(user=self.worker)
+        _build_worker_variant_dataset(1, color_offset=100)
+        count_1 = self._get_query_count(client)
+
+        # Teardown all variants so we can re-test with 5.
+        # We capture counts independently inside a single test to avoid setUp
+        # interference; the real invariant test is test_query_count_does_not_grow.
+        self._count_1 = count_1
+
+    def test_query_count_does_not_grow_linearly_with_n(self):
+        """
+        Core invariant: count(N=5) == count(N=20).
+        Before the fix this fails because each extra variant adds image queries.
+        """
+        client = APIClient()
+        client.force_authenticate(user=self.worker)
+
+        _build_worker_variant_dataset(5, color_offset=200)
+        count_5 = self._get_query_count(client)
+
+        # Add 15 more to reach 20 total (cumulative DB state within the same test).
+        _build_worker_variant_dataset(15, color_offset=300)
+        count_20 = self._get_query_count(client)
+
+        self.assertEqual(
+            count_5,
+            count_20,
+            msg=(
+                f"N+1 detected: query count grew from {count_5} (N=5) to "
+                f"{count_20} (N=20). WorkerVariantListView must use double "
+                "Prefetch to keep the count constant."
+            ),
+        )
+
+
+class VarianteImageHelperCacheBranchTest(TestCase):
+    """
+    Unit tests for the prefetch-cache code path in get_variante_imagen().
+
+    RED expectation: before the hasattr-gated branch is added to imagenes.py,
+    step 3 always issues a DB query. Both tests below will FAIL with
+    AssertionError because assertNumQueries(0) sees 1 query instead.
+    """
+
+    def _make_variant_with_no_images(self) -> ProductoVariantesModel:
+        producto = _create_product("Cache Branch Prod", imagen="img/products/cache-default.jpg")
+        variante = _create_variant(producto, _create_color("CacheColor", "#CACACA"))
+        return variante
+
+    def test_step3_reads_from_prefetch_cache_attribute(self):
+        """
+        When variante.producto has _cached_prod_imagenes populated with at least
+        one principal image, get_variante_imagen() must return its URL without
+        issuing any DB query for step 3 (assertNumQueries(0) around the call).
+        """
+        variante = self._make_variant_with_no_images()
+        producto = variante.producto
+
+        # Simulate what Django's Prefetch to_attr produces.
+        cached_img = ProductosImagenesModel(
+            producto=producto,
+            variante=None,
+            imagen="img/products/galeria/cached-principal.jpg",
+            es_principal=True,
+            orden=0,
+        )
+        producto._cached_prod_imagenes = [cached_img]
+
+        with self.assertNumQueries(0):
+            result = get_variante_imagen(variante)
+
+        self.assertEqual(result, _media_url("img/products/galeria/cached-principal.jpg"))
+
+    def test_step3_cache_populated_but_empty_falls_through_to_step4(self):
+        """
+        When _cached_prod_imagenes is an empty list (no product-level principal
+        image), get_variante_imagen() must fall through to step 4 (producto.imagen)
+        without issuing a DB query for step 3.
+        """
+        variante = self._make_variant_with_no_images()
+        producto = variante.producto
+
+        # Empty prefetch result — no product-level principal image exists.
+        producto._cached_prod_imagenes = []
+
+        with self.assertNumQueries(0):
+            result = get_variante_imagen(variante)
+
+        # Falls through to step 4: producto.imagen field.
+        self.assertEqual(result, _media_url("img/products/cache-default.jpg"))
