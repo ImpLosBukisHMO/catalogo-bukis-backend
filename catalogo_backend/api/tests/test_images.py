@@ -301,26 +301,15 @@ class WorkerVariantListQueryCountTest(TestCase):
         self.assertEqual(response.status_code, 200, response.data)
         return len(ctx)
 
-    def test_query_count_is_constant_for_n_equals_1(self):
+    def test_query_count_is_constant_for_n_equals_1_5_and_20(self):
+        """Core invariant: count(N=1) == count(N=5) == count(N=20)."""
         client = APIClient()
         client.force_authenticate(user=self.worker)
+
         _build_worker_variant_dataset(1, color_offset=100)
         count_1 = self._get_query_count(client)
 
-        # Teardown all variants so we can re-test with 5.
-        # We capture counts independently inside a single test to avoid setUp
-        # interference; the real invariant test is test_query_count_does_not_grow.
-        self._count_1 = count_1
-
-    def test_query_count_does_not_grow_linearly_with_n(self):
-        """
-        Core invariant: count(N=5) == count(N=20).
-        Before the fix this fails because each extra variant adds image queries.
-        """
-        client = APIClient()
-        client.force_authenticate(user=self.worker)
-
-        _build_worker_variant_dataset(5, color_offset=200)
+        _build_worker_variant_dataset(4, color_offset=200)
         count_5 = self._get_query_count(client)
 
         # Add 15 more to reach 20 total (cumulative DB state within the same test).
@@ -328,14 +317,108 @@ class WorkerVariantListQueryCountTest(TestCase):
         count_20 = self._get_query_count(client)
 
         self.assertEqual(
+            count_1,
+            count_5,
+            msg=(
+                f"N+1 detected: query count changed from {count_1} (N=1) to "
+                f"{count_5} (N=5). WorkerVariantListView must keep the count constant."
+            ),
+        )
+        self.assertEqual(
             count_5,
             count_20,
             msg=(
-                f"N+1 detected: query count grew from {count_5} (N=5) to "
-                f"{count_20} (N=20). WorkerVariantListView must use double "
-                "Prefetch to keep the count constant."
+                f"N+1 detected: query count changed from {count_5} (N=5) to "
+                f"{count_20} (N=20). WorkerVariantListView must keep the count constant."
             ),
         )
+
+
+class WorkerVariantListResponseContractTest(TestCase):
+    def setUp(self):
+        self.worker = _create_user("worker-contract@test.com", staff=True)
+
+    def test_response_shape_and_imagen_principal_contract_remain_unchanged(self):
+        client = APIClient()
+        client.force_authenticate(user=self.worker)
+
+        color_a = _create_color("Contract-A", "#AA0001")
+        color_b = _create_color("Contract-B", "#AA0002")
+        color_c = _create_color("Contract-C", "#AA0003")
+        color_d = _create_color("Contract-D", "#AA0004")
+        color_e = _create_color("Contract-E", "#AA0005")
+
+        variant_principal_product = _create_product("Contract Variant Principal")
+        variant_principal = _create_variant(variant_principal_product, color_a)
+        _attach_image(
+            variant_principal_product,
+            variante=variant_principal,
+            path="img/products/galeria/contract-variant-principal.jpg",
+            es_principal=True,
+            orden=0,
+        )
+
+        variant_any_product = _create_product("Contract Variant Any")
+        variant_any = _create_variant(variant_any_product, color_b)
+        _attach_image(
+            variant_any_product,
+            variante=variant_any,
+            path="img/products/galeria/contract-variant-any.jpg",
+            orden=1,
+        )
+
+        product_principal_product = _create_product("Contract Product Principal")
+        product_principal = _create_variant(product_principal_product, color_c)
+        _attach_image(
+            product_principal_product,
+            path="img/products/galeria/contract-product-principal.jpg",
+            es_principal=True,
+            orden=0,
+        )
+
+        product_default = _create_variant(
+            _create_product("Contract Product Default", imagen="img/products/contract-default.jpg"),
+            color_d,
+        )
+        no_image = _create_variant(_create_product("Contract None", imagen=""), color_e)
+
+        variants = [
+            variant_principal,
+            variant_any,
+            product_principal,
+            product_default,
+            no_image,
+        ]
+
+        response = client.get("/api/worker/variants/")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(len(response.data), len(variants))
+
+        expected_fields = set(WorkerVariantApiSerializer.Meta.fields)
+        expected_by_id = {
+            variant.id: WorkerVariantApiSerializer(variant).data
+            for variant in variants
+        }
+        actual_by_id = {
+            item["variant_id"]: item
+            for item in response.data
+        }
+
+        self.assertEqual(set(actual_by_id), set(expected_by_id))
+
+        for variant_id, expected_item in expected_by_id.items():
+            actual_item = actual_by_id[variant_id]
+            self.assertEqual(set(actual_item.keys()), expected_fields)
+            self.assertEqual(actual_item, expected_item)
+            self.assertTrue(
+                isinstance(actual_item["imagen_principal"], str)
+                or actual_item["imagen_principal"] is None
+            )
+
+        imagenes = [item["imagen_principal"] for item in response.data]
+        self.assertIn(None, imagenes)
+        self.assertIn(_media_url("img/products/contract-default.jpg"), imagenes)
 
 
 class VarianteImageHelperCacheBranchTest(TestCase):
