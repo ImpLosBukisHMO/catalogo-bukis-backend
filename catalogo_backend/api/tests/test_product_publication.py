@@ -121,7 +121,7 @@ class ProductPublicationStateTest(TestCase):
                 "capacidad": "",
                 "disponible": True,
                 "estado": ProductosModel.EstadoProducto.ACTIVE,
-                "categorias_ids": [category.id],
+                "categoria_id": category.id,
             },
             format="multipart",
         )
@@ -245,7 +245,7 @@ class ProductPublicationStateTest(TestCase):
         )
 
         self.assertEqual(response.status_code, 400, response.data)
-        self.assertIn("categorias", response.data)
+        self.assertIn("categoria", response.data)
         self.assertIn("variantes", response.data)
         self.assertIn("item", response.data)
         self.assertIn("stock", response.data)
@@ -273,7 +273,7 @@ class ProductPublicationStateTest(TestCase):
             f"/api/worker/productos/{producto.id}/",
             {
                 "estado": ProductosModel.EstadoProducto.ACTIVE,
-                "categorias_ids": [category.id],
+                "categoria_id": category.id,
             },
             format="json",
         )
@@ -292,7 +292,8 @@ class ProductPublicationStateTest(TestCase):
             estado=ProductosModel.EstadoProducto.ACTIVE,
             worker=worker,
         )
-        producto.categorias.add(category)
+        producto.categoria = category
+        producto.save(update_fields=["categoria"])
         variante = _create_variant(
             producto,
             color_name="Negro patch",
@@ -335,7 +336,7 @@ class ProductPublicationStateTest(TestCase):
             f"/api/worker/productos/{producto.id}/",
             {
                 "estado": ProductosModel.EstadoProducto.ACTIVE,
-                "categorias_ids": [category.id],
+                "categoria_id": category.id,
             },
             format="json",
         )

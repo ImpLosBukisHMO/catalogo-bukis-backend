@@ -105,10 +105,37 @@ class UsuariosModel(AbstractUser):
     def has_perm(self, perm, obj=None):
         return self.is_admin
 
+# Descuentos.
+class DescuentosModel(models.Model):
+    class DescuentoType(models.TextChoices):
+        GENERAL = "general", "General"
+        ESPECIAL = "especial", "Especial"
+
+    nombre = models.CharField(max_length=150)
+    tipo = models.CharField(max_length=20, choices=DescuentoType.choices, default=DescuentoType.GENERAL)
+    porcentaje = models.DecimalField(max_digits=10, decimal_places=2, null=False, default=0)
+    activo = models.BooleanField(default=False)
+    fecha_inicio = models.DateTimeField()
+    fecha_fin = models.DateTimeField()
+
+    def __str__(self):
+        return self.nombre
+    
+    @property
+    def es_valido(self):
+        hoy = timezone.now()
+        return self.activo and (self.fecha_inicio <= hoy <= self.fecha_fin)
 
 # Categorias de productos.
 class CategoriasModel(models.Model):
     nombre = models.CharField(max_length=50, null=False)
+    descuento_general = models.ForeignKey(
+        DescuentosModel,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="categorias_descuentos"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -137,10 +164,12 @@ class ProductosModel(models.Model):
         default=EstadoProducto.DRAFT,
         db_index=True,
     )
-    categorias = models.ManyToManyField(
+    categoria = models.ForeignKey(
         CategoriasModel,
-        related_name="productos",
-        blank=True
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="productos"
     )
     # Worker Panel: worker dueño del producto (null = producto de admin/sin dueño)
     worker = models.ForeignKey(
@@ -150,6 +179,13 @@ class ProductosModel(models.Model):
         blank=True,
         related_name="productos_propios",
         limit_choices_to={"is_staff": True},
+    )
+    descuento_especial = models.ForeignKey(
+        DescuentosModel,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="productos_descuentos"
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -173,9 +209,9 @@ class ProductosModel(models.Model):
                 "El producto debe estar disponible para publicarse."
             ]
 
-        if not self.categorias.exists():
-            errors["categorias"] = [
-                "El producto debe tener al menos una categoría para publicarse."
+        if not self.categoria:
+            errors["categoria"] = [
+                "El producto debe tener una categoría para publicarse."
             ]
 
         if not active_variants.exists():
@@ -216,9 +252,9 @@ class ProductosModel(models.Model):
                 "Al menos una variante activa debe tener stock válido para publicarse."
             ]
 
-        if not active_variants.filter(imagenes__isnull=False).exists():
+        if not active_variants.filter(imagenes__isnull=False).exists() and not self.imagen:
             errors["imagenes"] = [
-                "Al menos una variante activa debe tener una imagen principal o utilizable para publicarse."
+                "El producto debe tener una imagen base o al menos una variante activa con imagen para poder publicarse."
             ]
 
         if not publishable_variants and "variantes" not in errors:
@@ -232,6 +268,16 @@ class ProductosModel(models.Model):
         errors = self.get_publish_validation_errors()
         if errors:
             raise ValidationError(errors)
+        
+    def get_discounted_price(self, descuento):
+        if descuento.activo:
+            return self.precio - (self.precio * descuento.cantidad) / 100
+        return self.precio
+
+    def get_final_price(self):
+        if self.descuento_especial and self.descuento_especial.activo:
+            return self.get_discounted_price(self.precio, self.descuento_especial)
+        return self.precio
 
 
 # Colores.
@@ -292,7 +338,19 @@ class ProductoVariantesModel(models.Model):
 
     @property
     def precio_efectivo(self):
-        return self.precio if self.precio is not None else self.producto.precio
+        base_price = self.precio if self.precio is not None else self.producto.precio
+        
+        # Revisar descuento del producto
+        if self.producto.descuento_especial and self.producto.descuento_especial.es_valido:
+            discount_pct = self.producto.descuento_especial.porcentaje
+            return base_price - (base_price * discount_pct / 100)
+        
+        # Revisar descuento de la categoría
+        elif self.producto.categoria and self.producto.categoria.descuento_general and self.producto.categoria.descuento_general.es_valido:
+            discount_pct = self.producto.categoria.descuento_general.porcentaje
+            return base_price - (base_price * discount_pct / 100)
+
+        return base_price
 
 
 # ProductosImagenes (galería y principal por producto o por variante).

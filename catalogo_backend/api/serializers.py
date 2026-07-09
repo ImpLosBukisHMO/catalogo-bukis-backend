@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import (
+from api.models import (
     ProductosModel,
     ColorModel,
     ProductoVariantesModel,
@@ -13,8 +13,9 @@ from .models import (
     ProductosImagenesModel,
     CarritoModel,
     CarritoItemModel,
+    DescuentosModel
 )
-from . import services
+from api import services
 from api.utils.imagenes import get_variante_imagen
 
 
@@ -58,6 +59,16 @@ class CategoriasSerializer(serializers.ModelSerializer):
         model = CategoriasModel
         fields = "__all__"
 
+# =========================
+# Descuentos
+# =========================
+class DescuentosSerializer(serializers.ModelSerializer):
+    es_valido = serializers.ReadOnlyField()
+
+    class Meta:
+        model = DescuentosModel
+        fields = "__all__"
+
 
 class ColorSerializer(serializers.ModelSerializer):
     class Meta:
@@ -76,9 +87,15 @@ class ColorMiniSerializer(serializers.ModelSerializer):
 # =========================
 
 class ProductosSerializer(serializers.ModelSerializer):
-    categorias = serializers.PrimaryKeyRelatedField(
-        many=True,
-        queryset=CategoriasModel.objects.all()
+    categoria = serializers.PrimaryKeyRelatedField(
+        queryset=CategoriasModel.objects.all(),
+        allow_null=True,
+        required=False
+    )
+    descuento_especial = serializers.PrimaryKeyRelatedField(
+        queryset=DescuentosModel.objects.all(),
+        allow_null=True,
+        required=False
     )
 
     class Meta:
@@ -92,19 +109,36 @@ class ProductosSerializer(serializers.ModelSerializer):
             "peso",
             "medidas",
             "capacidad",
-            "categorias",
+            "categoria",
+            "descuento_especial",
             "disponible",
             "created_at",
             "updated_at",
         ]
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        
+        # Anidar categoría completa
+        if instance.categoria:
+            data["categoria"] = CategoriasSerializer(instance.categoria).data
+            
+            if instance.categoria.descuento_general:
+                data["categoria"]["descuento"] = DescuentosSerializer(instance.categoria.descuento_general).data
+            
+        # Anidar descuento completo
+        if instance.descuento_especial:
+            data["descuento_especial"] = DescuentosSerializer(instance.descuento_especial).data
+            
+        return data
+
 
 class ProductoMiniSerializer(serializers.ModelSerializer):
-    categorias = CategoriasSerializer(many=True, read_only=True)
+    categoria = CategoriasSerializer(read_only=True)
 
     class Meta:
         model = ProductosModel
-        fields = ["id", "nombre", "imagen", "precio", "categorias"]
+        fields = ["id", "nombre", "imagen", "precio", "categoria"]
 
 
 # =========================
@@ -185,6 +219,22 @@ class ProductoVariantesSerializer(serializers.ModelSerializer):
 
     def get_disponible(self, obj):
         return obj.activo and obj.stock > 0
+    
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        
+        # Anidar categoría completa
+        if instance.producto.categoria:
+            data["producto"]["categoria"] = CategoriasSerializer(instance.producto.categoria).data
+            
+            if instance.producto.categoria.descuento_general:
+                data["producto"]["categoria"]["descuento_general"] = DescuentosSerializer(instance.producto.categoria.descuento_general).data
+            
+        # Anidar descuento completo
+        if instance.producto.descuento_especial:
+            data["producto"]["descuento_especial"] = DescuentosSerializer(instance.producto.descuento_especial).data
+            
+        return data
 
 
 class ProductoVariantesEnProductoSerializer(serializers.ModelSerializer):
@@ -222,6 +272,7 @@ class ProductoDetalleSerializer(ProductosSerializer):
 # =========================
 
 class FavoritoVarianteSerializer(serializers.ModelSerializer):
+    producto_id = serializers.IntegerField(source="producto.id", read_only=True)
     nombre_producto = serializers.CharField(source="producto.nombre", read_only=True)
     precio = serializers.DecimalField(
         source="precio_efectivo", max_digits=10, decimal_places=2, read_only=True
@@ -231,7 +282,7 @@ class FavoritoVarianteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ProductoVariantesModel
-        fields = ["id", "item", "stock", "activo", "nombre_producto", "precio", "color", "imagen"]
+        fields = ["id", "item", "stock", "activo", "producto_id", "nombre_producto", "precio", "color", "imagen"]
 
     def get_imagen(self, obj):
         return get_variante_imagen(obj)
@@ -401,3 +452,4 @@ class CarritoReadSerializer(serializers.ModelSerializer):
         for it in obj.items.select_related("variante__producto").all():
             total += it.variante.precio_efectivo * it.cantidad
         return total
+

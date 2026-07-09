@@ -1,7 +1,8 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-
-from .views import (
+from api.views.descuentosViews import DescuentosRetrieveUpdateDestroy
+from api.views.descuentosViews import DescuentosListCreate
+from api.views import (
     mockViews,
     categoriasViews,
     direccionesViews,
@@ -10,7 +11,6 @@ from .views import (
     coloresViews,
     carritoViews,
 )
-
 from api.views.workerViews import (
     WorkerVariantListView,
     WorkerPedidoListView,
@@ -21,20 +21,15 @@ from api.views.workerViews import (
     WorkerVarianteCreateView,
     WorkerVarianteDetailView,
     WorkerImagenCreateView,
+    WorkerDescuentosListCreate,
+    WorkerDescuentosRetrieveUpdateDestroy,
+    WorkerDescuentosTiposView,
 )
 from api.views.usuariosViews import MiUsuarioView
-
 from api.views.productosViews import ProductosListCreate, ProductosRetrieveUpdateDestroy
-from .views.productoVariantesViews import (
-    ProductoVariantesListCreateView,
-    ProductoVariantesDetailView,
-)
-from .views.productosImagenesViews import (
-    ProductosImagenesListCreateView,
-    ProductosImagenesDetailView,
-)
-
-from .routes import usuariosURLs
+from api.views.productoVariantesViews import ProductoVariantesListCreateView, ProductoVariantesDetailView
+from api.views.productosImagenesViews import ProductosImagenesListCreateView, ProductosImagenesDetailView
+from api.routes import usuariosURLs
 
 
 urlpatterns = [
@@ -84,6 +79,10 @@ urlpatterns = [
     path("productos-imagenes/", ProductosImagenesListCreateView.as_view(), name="productos-imagenes-list-create"),
     path("productos-imagenes/<int:id>/", ProductosImagenesDetailView.as_view(), name="productos-imagenes-detail"),
 
+    # Descuentos
+    path("descuentos/", DescuentosListCreate.as_view(), name="descuentos-list-create"),
+    path("descuentos/<int:id>/", DescuentosRetrieveUpdateDestroy.as_view(), name="descuentos-detail"),
+
     # Carrito
     path("carrito/", carritoViews.carrito_actual, name="carrito-actual"),  # GET
     path("carrito/items/", carritoViews.carrito_add_item, name="carrito-add-item"),  # POST
@@ -108,6 +107,11 @@ urlpatterns = [
     path("worker/productos/<int:producto_id>/", WorkerProductoUpdateView.as_view(), name="worker-producto-detail"),
     path("worker/productos/<int:producto_id>/variantes/", WorkerVarianteCreateView.as_view(), name="worker-variante-create"),
     path("worker/productos/<int:producto_id>/imagenes/", WorkerImagenCreateView.as_view(), name="worker-imagen-create"),
+
+    # Worker - descuentos
+    path("worker/descuentos/", WorkerDescuentosListCreate.as_view(), name="worker-descuentos"),
+    path("worker/descuentos/tipos/", WorkerDescuentosTiposView.as_view(), name="worker-descuentos-tipos"),
+    path("worker/descuentos/<int:id>/", WorkerDescuentosRetrieveUpdateDestroy.as_view(), name="worker-descuentos-detail"),
 ]
 
 # Signup/Login/Logout legacy + usuarios CRUD (según su archivo routes/usuariosURLs.py)

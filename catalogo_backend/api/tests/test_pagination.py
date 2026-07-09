@@ -125,4 +125,4 @@ class PublicCatalogPaginationTest(TestCase):
         payload = response.data["results"][0]
         self.assertEqual(payload["id"], producto.id)
         self.assertEqual(payload["nombre"], producto.nombre)
-        self.assertIn("categorias", payload)
+        self.assertIn("categoria", payload)
