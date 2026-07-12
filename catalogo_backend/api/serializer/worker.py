@@ -124,6 +124,7 @@ class WorkerPedidoItemSerializer(serializers.Serializer):
     color = serializers.CharField(source="color_nombre_snapshot")
     color_hex = serializers.CharField(source="color_hex_snapshot")
     precio_unitario = serializers.DecimalField(source="precio_unitario_snapshot", max_digits=10, decimal_places=2)
+    descuento_porcentaje = serializers.DecimalField(source="descuento_porcentaje_snapshot", max_digits=5, decimal_places=2)
     subtotal = serializers.DecimalField(source="subtotal_linea_snapshot", max_digits=10, decimal_places=2)
     imagen = serializers.CharField(source="imagen_principal_snapshot")
 

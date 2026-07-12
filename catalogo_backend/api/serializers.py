@@ -330,6 +330,7 @@ class ClientePedidoItemSerializer(serializers.ModelSerializer):
             "color_nombre_snapshot",
             "color_hex_snapshot",
             "precio_unitario_snapshot",
+            "descuento_porcentaje_snapshot",
             "subtotal_linea_snapshot",
             "imagen_principal_snapshot",
         ]
@@ -399,6 +400,8 @@ class CarritoItemUpdateSerializer(serializers.Serializer):
 class CarritoItemReadSerializer(serializers.ModelSerializer):
     producto_id = serializers.IntegerField(source="variante.producto_id", read_only=True)
     producto_nombre = serializers.CharField(source="variante.producto.nombre", read_only=True)
+    item = serializers.CharField(source="variante.item", read_only=True)
+    codigo_barras = serializers.CharField(source="variante.producto.codigo_barras", read_only=True)
     color_nombre = serializers.CharField(source="variante.color.nombre", read_only=True)
     color_hex = serializers.CharField(source="variante.color.hex", read_only=True)
     precio_unitario = serializers.DecimalField(
@@ -406,6 +409,12 @@ class CarritoItemReadSerializer(serializers.ModelSerializer):
         max_digits=10,
         decimal_places=2,
         read_only=True,
+    )
+    descuento = serializers.DecimalField(
+        source="variante.producto.descuento_activo",
+        max_digits=10,
+        decimal_places=2,
+        read_only=True
     )
     subtotal_linea = serializers.SerializerMethodField()
     imagen = serializers.SerializerMethodField()
@@ -416,11 +425,14 @@ class CarritoItemReadSerializer(serializers.ModelSerializer):
             "id",
             "variante_id",
             "cantidad",
+            "item",
             "producto_id",
             "producto_nombre",
+            "codigo_barras",
             "color_nombre",
             "color_hex",
             "precio_unitario",
+            "descuento",
             "subtotal_linea",
             "imagen",
         ]

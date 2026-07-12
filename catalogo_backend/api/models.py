@@ -278,6 +278,14 @@ class ProductosModel(models.Model):
         if self.descuento_especial and self.descuento_especial.activo:
             return self.get_discounted_price(self.precio, self.descuento_especial)
         return self.precio
+    
+    @property
+    def descuento_activo(self):
+        if self.descuento_especial and self.descuento_especial.es_valido:
+            return self.descuento_especial.porcentaje
+        elif self.categoria.descuento_general and self.categoria.descuento_general.es_valido:
+            return self.categoria.descuento_general.porcentaje
+        return None
 
 
 # Colores.
@@ -298,7 +306,7 @@ class ColorModel(models.Model):
 # Productos X Color (variantes por color).
 class ProductoVariantesModel(models.Model):
     producto = models.ForeignKey(
-        "ProductosModel",
+        ProductosModel,
         on_delete=models.CASCADE,
         related_name="producto_colores",
     )
@@ -539,6 +547,8 @@ class PedidoProductosModel(models.Model):
     color_hex_snapshot = models.CharField(max_length=7, null=False, default="")
 
     precio_unitario_snapshot = models.DecimalField(max_digits=10, decimal_places=2, null=False, default=0)
+    # Porcentaje de descuento vigente en el momento del checkout (0 = sin descuento)
+    descuento_porcentaje_snapshot = models.DecimalField(max_digits=5, decimal_places=2, null=False, default=0)
     subtotal_linea_snapshot = models.DecimalField(max_digits=10, decimal_places=2, null=False, default=0)
 
     imagen_principal_snapshot = models.CharField(max_length=500, null=False, default="")

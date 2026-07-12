@@ -229,6 +229,7 @@ def carrito_checkout(request):
                 color_nombre_snapshot=c.nombre,
                 color_hex_snapshot=c.hex,
                 precio_unitario_snapshot=precio_unit,
+                descuento_porcentaje_snapshot=p.descuento_activo if p.descuento_activo is not None else 0,
                 subtotal_linea_snapshot=subtotal_linea,
                 imagen_principal_snapshot=imagen_snapshot,
                 # legacy (opcional)
