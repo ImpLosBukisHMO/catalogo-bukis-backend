@@ -283,7 +283,7 @@ class ProductosModel(models.Model):
     def descuento_activo(self):
         if self.descuento_especial and self.descuento_especial.es_valido:
             return self.descuento_especial.porcentaje
-        elif self.categoria.descuento_general and self.categoria.descuento_general.es_valido:
+        elif self.categoria and self.categoria.descuento_general and self.categoria.descuento_general.es_valido:
             return self.categoria.descuento_general.porcentaje
         return None
 
