@@ -60,8 +60,12 @@ class WorkerVariantListView(APIView):
     def get(self, request):
         qs = (
             ProductoVariantesModel.objects
-            .select_related("producto__categoria__descuento_general", 
-                "producto__descuento_especial", "color",
+            .select_related(
+                "producto__categoria__descuento_general", 
+                "producto__descuento_especial", 
+                "color"
+            )
+            .prefetch_related(
                 Prefetch(
                     "imagenes",
                     queryset=ProductosImagenesModel.objects.order_by("orden", "id"),
