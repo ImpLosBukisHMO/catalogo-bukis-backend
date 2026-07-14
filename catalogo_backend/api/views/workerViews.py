@@ -1,3 +1,7 @@
+# pyrefly: ignore [missing-import]
+from django.db.models import Prefetch
+
+# pyrefly: ignore [missing-import]
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -56,7 +60,21 @@ class WorkerVariantListView(APIView):
     def get(self, request):
         qs = (
             ProductoVariantesModel.objects
-            .select_related("producto__categoria__descuento_general", "producto__descuento_especial", "color")
+            .select_related("producto__categoria__descuento_general", 
+                "producto__descuento_especial", "color",
+                Prefetch(
+                    "imagenes",
+                    queryset=ProductosImagenesModel.objects.order_by("orden", "id"),
+                    to_attr="_cached_variante_imagenes",
+                ),
+                Prefetch(
+                    "producto__imagenes",
+                    queryset=ProductosImagenesModel.objects
+                        .filter(variante__isnull=True)
+                        .order_by("orden", "id"),
+                    to_attr="_cached_prod_imagenes",
+                ),
+            )
         )
 
         serializer = WorkerVariantSerializer(qs, many=True)
