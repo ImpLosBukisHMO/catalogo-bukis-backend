@@ -1,4 +1,4 @@
-﻿"""
+"""
 Tests de integración para la implementación de descuentos.
 
 Cubre:
@@ -285,7 +285,9 @@ class WorkerVariantSerializerDiscountExposureTest(TestCase):
         self.assertIsNotNone(data["producto"]["descuento_especial"])
         self.assertEqual(data["producto"]["descuento_especial"]["porcentaje"], 20.0)
         self.assertTrue(data["producto"]["descuento_especial"]["es_valido"])
-        self.assertEqual(data["producto"]["precio"], "80.00")
+        # El precio efectivo refleja el descuento; se compara como Decimal
+        # para tolerar la precision interna (ej. "80.0000" vs "80.00").
+        self.assertEqual(Decimal(data["producto"]["precio"]), Decimal("80.00"))
 
     def test_serializer_expone_descuento_de_categoria(self):
         descuento = _create_discount(nombre="Cat serializer 15%", porcentaje=Decimal("15.00"))
@@ -298,7 +300,7 @@ class WorkerVariantSerializerDiscountExposureTest(TestCase):
         self.assertIsNotNone(data["producto"]["categoria"])
         self.assertIsNotNone(data["producto"]["categoria"]["descuento"])
         self.assertEqual(data["producto"]["categoria"]["descuento"]["porcentaje"], 15.0)
-        self.assertEqual(data["producto"]["precio"], "85.00")
+        self.assertEqual(Decimal(data["producto"]["precio"]), Decimal("85.00"))
 
     def test_serializer_sin_descuento_expone_nulos(self):
         producto = _create_product("Sin desc serializer", precio=Decimal("100.00"))
