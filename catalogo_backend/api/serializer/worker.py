@@ -194,6 +194,8 @@ class WorkerCambiarEstadoSerializer(serializers.Serializer):
 # WORKER - PRODUCTOS PROPIOS
 # =========================
 class WorkerDescuentosSerializer(serializers.ModelSerializer):
+    es_valido = serializers.ReadOnlyField()
+
     class Meta:
         model = DescuentosModel
         fields = "__all__"
