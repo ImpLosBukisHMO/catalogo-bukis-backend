@@ -1,9 +1,11 @@
+# pyrefly: ignore [missing-import]
 from django.db.models import Prefetch
 
+# pyrefly: ignore [missing-import]
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from rest_framework import status
+from rest_framework import status, generics
 
 from api.permissions import IsWorker
 from api.models import (
@@ -11,8 +13,10 @@ from api.models import (
     ProductoVariantesModel,
     ProductosImagenesModel,
     PedidosModel,
+    DescuentosModel,
 )
 from api.serializer.worker import (
+    WorkerDescuentosSerializer,
     WorkerVariantSerializer,
     WorkerPedidoSerializer,
     WorkerPedidoDetalleSerializer,
@@ -25,6 +29,29 @@ from api.serializer.worker import (
 
 
 # =========================
+# WORKER - DESCUENTOS
+# =========================
+class WorkerDescuentosListCreate(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated, IsWorker]
+    queryset = DescuentosModel.objects.all()
+    serializer_class = WorkerDescuentosSerializer
+
+class WorkerDescuentosRetrieveUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated, IsWorker]
+    queryset = DescuentosModel.objects.all()
+    serializer_class = WorkerDescuentosSerializer
+    lookup_field = 'id'
+
+
+class WorkerDescuentosTiposView(APIView):
+    permission_classes = [IsAuthenticated, IsWorker]
+
+    def get(self, request):
+        tipos = [c[0] for c in DescuentosModel.DescuentoType.choices]
+        return Response({"datos": tipos}, status=status.HTTP_200_OK)
+
+
+# =========================
 # WORKER - VARIANTS
 # =========================
 class WorkerVariantListView(APIView):
@@ -33,9 +60,12 @@ class WorkerVariantListView(APIView):
     def get(self, request):
         qs = (
             ProductoVariantesModel.objects
-            .select_related("producto", "color")
+            .select_related(
+                "producto__categoria__descuento_general", 
+                "producto__descuento_especial", 
+                "color"
+            )
             .prefetch_related(
-                "producto__categorias",
                 Prefetch(
                     "imagenes",
                     queryset=ProductosImagenesModel.objects.order_by("orden", "id"),
@@ -147,7 +177,7 @@ class WorkerProductoListCreateView(APIView):
         qs = (
             ProductosModel.objects
             .filter(worker=request.user)
-            .prefetch_related("categorias", "producto_colores")
+            .prefetch_related("producto_colores")
             .order_by("-created_at")
         )
         serializer = WorkerProductoSerializer(qs, many=True, context={"request": request})
@@ -279,3 +309,4 @@ class WorkerImagenCreateView(APIView):
 
         serializer.save(producto=producto)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+

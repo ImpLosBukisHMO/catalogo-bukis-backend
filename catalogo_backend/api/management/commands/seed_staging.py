@@ -938,7 +938,8 @@ class Command(BaseCommand):
 
         # Assign category
         if created and categories and cat_idx < len(categories) and categories[cat_idx]:
-            product.categorias.add(categories[cat_idx])
+            product.categoria = categories[cat_idx]
+            product.save(update_fields=["categoria"])
 
         variants: list[ProductoVariantesModel] = []
         for vdef in scenario.get("variants", []):
@@ -1038,7 +1039,8 @@ class Command(BaseCommand):
         )
 
         if created and category:
-            product.categorias.add(category)
+            product.categoria = category
+            product.save(update_fields=["categoria"])
 
         variants: list[ProductoVariantesModel] = []
         for vdef in scenario.get("variants", []):

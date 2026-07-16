@@ -1,6 +1,6 @@
 # Aquí van todos los serializers del worker
-
 from rest_framework import serializers
+from api.models import DescuentosModel
 from api.models import (
     ProductosModel,
     ProductoVariantesModel,
@@ -13,7 +13,6 @@ from api.utils.imagenes import get_variante_imagen
 # para productos
 class WorkerVariantSerializer(serializers.ModelSerializer):
     variant_id = serializers.IntegerField(source="id")
-
     producto = serializers.SerializerMethodField()
     color = serializers.SerializerMethodField()
     imagen_principal = serializers.SerializerMethodField()
@@ -36,11 +35,40 @@ class WorkerVariantSerializer(serializers.ModelSerializer):
     # -------------------------
     def get_producto(self, obj):
         p = obj.producto
+        cat_data = None
+        if p.categoria:
+            desc_cat_data = None
+            if p.categoria.descuento_general:
+                desc = p.categoria.descuento_general
+                desc_cat_data = {
+                    "id": desc.id,
+                    "nombre": desc.nombre,
+                    "porcentaje": float(desc.porcentaje),
+                    "es_valido": desc.es_valido,
+                }
+            cat_data = {
+                "id": p.categoria.id,
+                "nombre": p.categoria.nombre,
+                "descuento": desc_cat_data
+            }
+
+        desc_prod_data = None
+        if p.descuento_especial:
+            desc = p.descuento_especial
+            desc_prod_data = {
+                "id": desc.id,
+                "nombre": desc.nombre,
+                "porcentaje": float(desc.porcentaje),
+                "es_valido": desc.es_valido,
+            }
+
         return {
             "id": p.id,
             "nombre": p.nombre,
+            "precio_original": str(obj.precio if obj.precio is not None else p.precio),
             "precio": str(obj.precio_efectivo),
-            "categorias": [c.id for c in p.categorias.all()],
+            "categoria": cat_data,
+            "descuento_especial": desc_prod_data,
         }
 
     # -------------------------
@@ -96,6 +124,7 @@ class WorkerPedidoItemSerializer(serializers.Serializer):
     color = serializers.CharField(source="color_nombre_snapshot")
     color_hex = serializers.CharField(source="color_hex_snapshot")
     precio_unitario = serializers.DecimalField(source="precio_unitario_snapshot", max_digits=10, decimal_places=2)
+    descuento_porcentaje = serializers.DecimalField(source="descuento_porcentaje_snapshot", max_digits=5, decimal_places=2)
     subtotal = serializers.DecimalField(source="subtotal_linea_snapshot", max_digits=10, decimal_places=2)
     imagen = serializers.CharField(source="imagen_principal_snapshot")
 
@@ -164,14 +193,26 @@ class WorkerCambiarEstadoSerializer(serializers.Serializer):
 # =========================
 # WORKER - PRODUCTOS PROPIOS
 # =========================
+class WorkerDescuentosSerializer(serializers.ModelSerializer):
+    es_valido = serializers.ReadOnlyField()
+
+    class Meta:
+        model = DescuentosModel
+        fields = "__all__"
+
 class WorkerProductoSerializer(serializers.ModelSerializer):
-    categorias = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
-    categorias_ids = serializers.PrimaryKeyRelatedField(
-        many=True,
+    categoria = serializers.PrimaryKeyRelatedField(read_only=True)
+    categoria_id = serializers.PrimaryKeyRelatedField(
         write_only=True,
         queryset=__import__("api.models", fromlist=["CategoriasModel"]).CategoriasModel.objects.all(),
-        source="categorias",
+        source="categoria",
         required=False,
+        allow_null=True,
+    )
+    descuento_especial = serializers.PrimaryKeyRelatedField(
+        queryset=__import__("api.models", fromlist=["DescuentosModel"]).DescuentosModel.objects.all(),
+        required=False,
+        allow_null=True,
     )
 
     class Meta:
@@ -187,8 +228,9 @@ class WorkerProductoSerializer(serializers.ModelSerializer):
             "capacidad",
             "disponible",
             "estado",
-            "categorias",
-            "categorias_ids",
+            "categoria",
+            "categoria_id",
+            "descuento_especial",
             "created_at",
             "updated_at",
         ]
@@ -199,11 +241,17 @@ class WorkerProductoSerializer(serializers.ModelSerializer):
             return ProductosModel.EstadoProducto.DRAFT
         return value
 
+
     def validate(self, attrs):
         instance = self.instance
-        target_estado = attrs.get("estado", getattr(instance, "estado", ProductosModel.EstadoProducto.DRAFT))
-        categorias = attrs.get("categorias")
 
+        # Solo validar publicación si el usuario está EXPLÍCITAMENTE cambiando
+        # el estado a ACTIVE en este request. Si ya está activo pero el PATCH
+        # no incluye 'estado', no re-validar (evita 400 al editar campos normales).
+        if "estado" not in attrs:
+            return attrs
+
+        target_estado = attrs["estado"]
         if target_estado != ProductosModel.EstadoProducto.ACTIVE:
             return attrs
 
@@ -218,27 +266,20 @@ class WorkerProductoSerializer(serializers.ModelSerializer):
             capacidad=attrs.get("capacidad"),
             disponible=attrs.get("disponible", True),
             estado=target_estado,
+            categoria=attrs.get("categoria"),
         )
 
         if instance is not None:
             for field, value in attrs.items():
-                if field == "categorias":
-                    continue
                 setattr(producto, field, value)
 
         errors = producto.get_publish_validation_errors()
-        if categorias is not None and len(categorias) > 0:
-            errors.pop("categorias", None)
-
-        if categorias is not None and len(categorias) == 0:
-            errors["categorias"] = [
-                "El producto debe tener al menos una categoría para publicarse."
-            ]
 
         if errors:
             raise serializers.ValidationError(errors)
 
         return attrs
+
 
 
 # =========================

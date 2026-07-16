@@ -83,7 +83,8 @@ class Command(BaseCommand):
                 }
             )
             if p_created:
-                prod.categorias.add(p_info["cat"])
+                prod.categoria = p_info["cat"]
+                prod.save(update_fields=["categoria"])
             
             # Seleccionamos colores únicos para este producto para evitar errores de UniqueConstraint
             colores_seleccionados = random.sample(colores_objs, k=3)
