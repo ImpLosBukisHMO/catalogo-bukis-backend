@@ -46,6 +46,10 @@ class AdminCarrito(admin.ModelAdmin):
 class AdminCarritoItem(admin.ModelAdmin):
     list_display = ("id", "carrito", "variante", "cantidad", "created_at", "updated_at")
 
+class AdminBannerOferta(admin.ModelAdmin):
+    list_display = ("id", "tipo", "orden", "activo", "fecha_inicio", "fecha_fin")
+    list_editable = ("orden", "activo")
+
 
 admin.site.register(models.UsuariosModel, AdminUsuario)
 admin.site.register(models.DireccionesModel, AdminDireccion)
@@ -59,3 +63,4 @@ admin.site.register(models.ProductoVariantesModel, AdminProductoVariantes)
 admin.site.register(models.ProductosImagenesModel, AdminProductosImagenes)
 admin.site.register(models.CarritoModel, AdminCarrito)
 admin.site.register(models.CarritoItemModel, AdminCarritoItem)
+admin.site.register(models.BannerOfertaModel, AdminBannerOferta)

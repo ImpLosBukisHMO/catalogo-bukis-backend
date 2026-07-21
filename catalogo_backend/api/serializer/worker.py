@@ -7,8 +7,81 @@ from api.models import (
     ProductosImagenesModel,
     ColorModel,
     PedidosModel,
+    BannerOfertaModel,
 )
 from api.utils.imagenes import get_variante_imagen
+
+
+# =========================
+# WORKER - BANNER DE OFERTAS
+# =========================
+class WorkerBannerOfertaSerializer(serializers.ModelSerializer):
+    MAX_VIDEO_BYTES = 20 * 1024 * 1024  # 20 MB
+    MAX_IMAGE_BYTES = 5 * 1024 * 1024   # 5 MB
+    MAX_ACTIVE_SLIDES = 10
+    ALLOWED_IMAGE_EXTS = {"jpg", "jpeg", "png", "webp"}
+    ALLOWED_VIDEO_EXTS = {"mp4", "webm"}
+
+    class Meta:
+        model = BannerOfertaModel
+        fields = [
+            "id",
+            "tipo",
+            "archivo",
+            "orden",
+            "activo",
+            "fecha_inicio",
+            "fecha_fin",
+            "creado_en",
+            "actualizado_en",
+        ]
+        read_only_fields = ["creado_en", "actualizado_en"]
+
+    def validate(self, attrs):
+        fi = attrs.get("fecha_inicio", getattr(self.instance, "fecha_inicio", None))
+        ff = attrs.get("fecha_fin", getattr(self.instance, "fecha_fin", None))
+        if fi and ff and fi > ff:
+            raise serializers.ValidationError(
+                {"fecha_fin": "Debe ser posterior a la fecha de inicio."}
+            )
+
+        tipo = attrs.get("tipo", getattr(self.instance, "tipo", None))
+        archivo = attrs.get("archivo", None)
+        if archivo is not None and tipo is not None:
+            size = getattr(archivo, "size", 0) or 0
+            if tipo == BannerOfertaModel.MediaType.VIDEO and size > self.MAX_VIDEO_BYTES:
+                raise serializers.ValidationError(
+                    {"archivo": "El video no puede superar 20 MB."}
+                )
+            if tipo == BannerOfertaModel.MediaType.IMAGEN and size > self.MAX_IMAGE_BYTES:
+                raise serializers.ValidationError(
+                    {"archivo": "La imagen no puede superar 5 MB."}
+                )
+
+            name = getattr(archivo, "name", "") or ""
+            ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+            if tipo == BannerOfertaModel.MediaType.VIDEO and ext not in self.ALLOWED_VIDEO_EXTS:
+                raise serializers.ValidationError(
+                    {"archivo": "Formato de video inválido. Usa mp4 o webm."}
+                )
+            if tipo == BannerOfertaModel.MediaType.IMAGEN and ext not in self.ALLOWED_IMAGE_EXTS:
+                raise serializers.ValidationError(
+                    {"archivo": "Formato de imagen inválido. Usa jpg, png o webp."}
+                )
+
+        return attrs
+
+    def validate_activo(self, value):
+        """Máximo 10 banners activos a la vez."""
+        if value is True:
+            qs = BannerOfertaModel.objects.filter(activo=True)
+            if self.instance:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.count() >= self.MAX_ACTIVE_SLIDES:
+                raise serializers.ValidationError(
+                    "No puedes tener más de 10 banners activos a la vez."
+                )
+        return value
 
 # para productos
 class WorkerVariantSerializer(serializers.ModelSerializer):
