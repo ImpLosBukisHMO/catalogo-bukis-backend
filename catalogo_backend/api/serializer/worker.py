@@ -55,24 +55,41 @@ class WorkerBannerOfertaSerializer(serializers.ModelSerializer):
     @staticmethod
     def _peek_bytes(archivo, n: int) -> bytes:
         """Lee `n` bytes del archivo sin consumir la posición para lecturas posteriores."""
+        data = b""
         try:
-            archivo.seek(0)
-            data = archivo.read(n)
+            try:
+                archivo.seek(0)
+            except Exception:
+                # Si no es seekable no podemos hacer un peek confiable.
+                return b""
+            data = archivo.read(n) or b""
         finally:
             try:
                 archivo.seek(0)
             except Exception:
                 pass
-        return data or b""
+        return data
 
     def _validate_image_content(self, archivo, ext: str) -> None:
-        """Confirma que `archivo` es realmente una imagen y su formato coincide con la extensión."""
+        """
+        Confirma que `archivo` es realmente una imagen y su formato coincide con la extensión.
+        Pillow lanza DecompressionBombError si el tamaño descomprimido supera su umbral por defecto
+        (~89 megapíxeles), lo que nos cubre contra imágenes-bomba chicas en bytes pero enormes en RAM.
+        """
         try:
             archivo.seek(0)
             with Image.open(archivo) as img:
-                img.verify()  # valida integridad
+                img.verify()  # valida integridad; también dispara DecompressionBombError
                 detected = (img.format or "").upper()
-        except (UnidentifiedImageError, Exception):
+        except UnidentifiedImageError:
+            raise serializers.ValidationError(
+                {"archivo": "El archivo no es una imagen válida."}
+            )
+        except Image.DecompressionBombError:
+            raise serializers.ValidationError(
+                {"archivo": "La imagen es demasiado grande para procesarse."}
+            )
+        except Exception:
             raise serializers.ValidationError(
                 {"archivo": "El archivo no es una imagen válida."}
             )
@@ -173,13 +190,21 @@ class WorkerBannerOfertaSerializer(serializers.ModelSerializer):
     # Enforcement transaccional del límite de 10 activos
     # -------------------------
     def _assert_max_active_slides(self, activo_efectivo: bool) -> None:
-        """Debe llamarse dentro de una transacción con select_for_update para evitar races."""
+        """
+        Debe llamarse dentro de una transacción. Fuerza la evaluación del queryset
+        con `list(...)` para que las filas queden bloqueadas por `select_for_update`.
+        Nota: `.count()` no dispara el lock porque Django limpia la flag select_for_update
+        en agregaciones (ver Query.get_aggregation en Django 6).
+        En SQLite `select_for_update` es no-op — el lock efectivo se toma solo en Postgres.
+        """
         if not activo_efectivo:
             return
         qs = BannerOfertaModel.objects.select_for_update().filter(activo=True)
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
-        if qs.count() >= self.MAX_ACTIVE_SLIDES:
+        # Materializar para que el lock se aplique realmente, y contar sobre la lista.
+        active_ids = list(qs.values_list("id", flat=True))
+        if len(active_ids) >= self.MAX_ACTIVE_SLIDES:
             raise serializers.ValidationError(
                 {"activo": "No puedes tener más de 10 banners activos a la vez."}
             )
