@@ -19,6 +19,12 @@ def get_product_image_path(instance, filename):
     return os.path.join("img/products/", filename)
 
 
+def get_banner_oferta_path(instance, filename):
+    ext = filename.split(".")[-1].lower() if "." in filename else "bin"
+    filename = f"{uuid.uuid4()}.{ext}"
+    return os.path.join("img/banner-ofertas/", filename)
+
+
 def default_color_metadata():
     return {"colores": []}
 
@@ -582,7 +588,7 @@ class BannerOfertaModel(models.Model):
         VIDEO = "video", "Video"
 
     tipo = models.CharField(max_length=10, choices=MediaType.choices)
-    archivo = models.FileField(upload_to="img/banner-ofertas/")
+    archivo = models.FileField(upload_to=get_banner_oferta_path)
     orden = models.PositiveIntegerField(default=0)
     activo = models.BooleanField(default=True)
     fecha_inicio = models.DateTimeField(null=True, blank=True)
@@ -592,6 +598,9 @@ class BannerOfertaModel(models.Model):
 
     class Meta:
         ordering = ["orden", "id"]
+        indexes = [
+            models.Index(fields=["activo", "orden"], name="banner_activo_orden_idx"),
+        ]
 
     def __str__(self) -> str:
         return f"Banner #{self.id} ({self.tipo}, orden={self.orden})"

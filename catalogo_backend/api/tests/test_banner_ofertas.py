@@ -5,9 +5,12 @@ Cubre:
 - Property `esta_vigente` con distintas combinaciones de activo/fechas.
 - `clean()` valida fecha_inicio <= fecha_fin.
 - Endpoints worker (list/create/update/destroy) requieren rol worker.
-- Validaciones del serializer: tamaño de archivo, extensión, máx 10 activos, fechas.
+- Validaciones del serializer: tamaño, extensión, contenido real (Pillow + magic
+  numbers), máx 10 activos (incluye caso omitiendo el campo), consistencia de
+  tipo en PATCH, fechas.
 - Endpoint público expone solo banners activos y vigentes, ordenados por `orden`.
 """
+import io
 from datetime import timedelta
 
 from django.core.exceptions import ValidationError
@@ -15,6 +18,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
+from PIL import Image
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -36,12 +40,57 @@ def _create_user(email: str, staff: bool = False) -> UsuariosModel:
     )
 
 
-def _make_image_file(name: str = "slide.jpg", size_bytes: int = 1024) -> SimpleUploadedFile:
-    return SimpleUploadedFile(name, b"x" * size_bytes, content_type="image/jpeg")
+def _image_bytes(format: str = "JPEG", size=(16, 16)) -> bytes:
+    """Genera bytes de imagen real usando Pillow."""
+    buf = io.BytesIO()
+    Image.new("RGB", size, color=(200, 30, 30)).save(buf, format=format)
+    return buf.getvalue()
 
 
-def _make_video_file(name: str = "slide.mp4", size_bytes: int = 1024) -> SimpleUploadedFile:
-    return SimpleUploadedFile(name, b"x" * size_bytes, content_type="video/mp4")
+def _make_image_file(
+    name: str = "slide.jpg",
+    size_bytes: int | None = None,
+    format: str = "JPEG",
+) -> SimpleUploadedFile:
+    """
+    Genera un archivo de imagen válido. Si `size_bytes` se pide (para test de
+    tamaño), padea con un chunk final de datos para inflar sin corromper el header.
+    Pillow ya valida el header al inicio del archivo.
+    """
+    payload = _image_bytes(format=format)
+    if size_bytes is not None and size_bytes > len(payload):
+        payload = payload + b"\x00" * (size_bytes - len(payload))
+    return SimpleUploadedFile(name, payload, content_type="image/jpeg")
+
+
+def _make_video_file(
+    name: str = "slide.mp4",
+    size_bytes: int | None = None,
+    container: str = "mp4",
+) -> SimpleUploadedFile:
+    """
+    Genera un archivo con magic numbers válidos de contenedor mp4/webm.
+    Es contenido mínimo (no reproducible), pero pasa la validación magic-number.
+    """
+    if container == "mp4":
+        # 4 bytes size + 'ftyp' + 'isom' + 4 bytes minor version + brands
+        header = (
+            b"\x00\x00\x00\x20"  # box size 32
+            + b"ftyp"
+            + b"isom"
+            + b"\x00\x00\x02\x00"
+            + b"isomiso2mp41"
+        )
+    elif container == "webm":
+        # EBML header (0x1A45DFA3)
+        header = b"\x1a\x45\xdf\xa3" + b"\x01\x00\x00\x00" + b"\x00" * 24
+    else:
+        raise ValueError(f"container desconocido: {container}")
+
+    payload = header
+    if size_bytes is not None and size_bytes > len(payload):
+        payload = payload + b"\x00" * (size_bytes - len(payload))
+    return SimpleUploadedFile(name, payload, content_type=f"video/{container}")
 
 
 def _create_banner(**overrides) -> BannerOfertaModel:
@@ -255,6 +304,98 @@ class WorkerBannerOfertasEndpointTest(TestCase):
             format="multipart",
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_contenido_no_es_imagen_real(self):
+        """Un archivo llamado .jpg pero con contenido basura debe rechazarse."""
+        self._auth_worker()
+        fake = SimpleUploadedFile("slide.jpg", b"\x00" * 2048, content_type="image/jpeg")
+        resp = self.api.post(
+            self.list_url,
+            {"tipo": "imagen", "archivo": fake, "orden": 1},
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_contenido_imagen_formato_distinto_a_extension(self):
+        """Un PNG guardado como .jpg debe rechazarse (mismatch contenido/extensión)."""
+        self._auth_worker()
+        png_bytes_as_jpg = SimpleUploadedFile(
+            "slide.jpg", _image_bytes(format="PNG"), content_type="image/jpeg"
+        )
+        resp = self.api.post(
+            self.list_url,
+            {"tipo": "imagen", "archivo": png_bytes_as_jpg, "orden": 1},
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_contenido_no_es_video_real(self):
+        """Un archivo llamado .mp4 pero sin magic numbers válidos debe rechazarse."""
+        self._auth_worker()
+        fake = SimpleUploadedFile("slide.mp4", b"\x00" * 2048, content_type="video/mp4")
+        resp = self.api.post(
+            self.list_url,
+            {"tipo": "video", "archivo": fake, "orden": 1},
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_no_permite_11avo_activo_omitiendo_campo_activo(self):
+        """El default=True del modelo NO debe bypassear el límite de 10 activos."""
+        for i in range(10):
+            _create_banner(orden=i, activo=True)
+        self._auth_worker()
+        # Nótese: NO se envía 'activo' → default es True
+        resp = self.api.post(
+            self.list_url,
+            {"tipo": "imagen", "archivo": _make_image_file(), "orden": 11},
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(BannerOfertaModel.objects.filter(activo=True).count(), 10)
+
+    def test_patch_activar_cuando_ya_hay_10_activos_falla(self):
+        """Actualizar un slide inactivo a activo cuando ya hay 10 activos debe fallar."""
+        for i in range(10):
+            _create_banner(orden=i, activo=True)
+        inactivo = _create_banner(orden=99, activo=False)
+        self._auth_worker()
+        detail_url = reverse("worker-banner-ofertas-detail", args=[inactivo.id])
+        resp = self.api.patch(detail_url, {"activo": True}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_patch_cambiar_tipo_sin_archivo_falla(self):
+        """Cambiar tipo (imagen→video) sin re-subir archivo debe rechazarse."""
+        banner = _create_banner(
+            tipo=BannerOfertaModel.MediaType.IMAGEN, archivo=_make_image_file()
+        )
+        self._auth_worker()
+        detail_url = reverse("worker-banner-ofertas-detail", args=[banner.id])
+        resp = self.api.patch(detail_url, {"tipo": "video"}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_patch_cambiar_tipo_con_archivo_valido_funciona(self):
+        banner = _create_banner(
+            tipo=BannerOfertaModel.MediaType.IMAGEN, archivo=_make_image_file()
+        )
+        self._auth_worker()
+        detail_url = reverse("worker-banner-ofertas-detail", args=[banner.id])
+        resp = self.api.patch(
+            detail_url,
+            {"tipo": "video", "archivo": _make_video_file()},
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.content)
+        banner.refresh_from_db()
+        self.assertEqual(banner.tipo, BannerOfertaModel.MediaType.VIDEO)
+
+    def test_patch_solo_orden_no_dispara_validacion_de_archivo(self):
+        """Un PATCH solo con orden no debe requerir re-subir archivo."""
+        banner = _create_banner(orden=0)
+        self._auth_worker()
+        detail_url = reverse("worker-banner-ofertas-detail", args=[banner.id])
+        resp = self.api.patch(detail_url, {"orden": 7}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.content)
 
     def test_fechas_invalidas_rechazadas(self):
         self._auth_worker()

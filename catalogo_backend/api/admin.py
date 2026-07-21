@@ -48,6 +48,7 @@ class AdminCarritoItem(admin.ModelAdmin):
 
 class AdminBannerOferta(admin.ModelAdmin):
     list_display = ("id", "tipo", "orden", "activo", "fecha_inicio", "fecha_fin")
+    list_display_links = ("id", "tipo")
     list_editable = ("orden", "activo")
 
 
