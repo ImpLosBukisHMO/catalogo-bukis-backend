@@ -19,6 +19,12 @@ def get_product_image_path(instance, filename):
     return os.path.join("img/products/", filename)
 
 
+def get_banner_oferta_path(instance, filename):
+    ext = filename.split(".")[-1].lower() if "." in filename else "bin"
+    filename = f"{uuid.uuid4()}.{ext}"
+    return os.path.join("img/banner-ofertas/", filename)
+
+
 def default_color_metadata():
     return {"colores": []}
 
@@ -569,3 +575,50 @@ class PedidoProductosModel(models.Model):
 
     def __str__(self) -> str:
         return f"Pedido {self.pedido_id} - Variante {self.variante_id} - Cant {self.cantidad}"
+
+
+class BannerOfertaModel(models.Model):
+    """
+    Slide del banner de ofertas mostrado en la home pública.
+    Cada instancia es un archivo (imagen o video) con ordenamiento,
+    activación/desactivación, y ventana opcional de vigencia.
+    """
+    class MediaType(models.TextChoices):
+        IMAGEN = "imagen", "Imagen"
+        VIDEO = "video", "Video"
+
+    tipo = models.CharField(max_length=10, choices=MediaType.choices)
+    archivo = models.FileField(upload_to=get_banner_oferta_path)
+    orden = models.PositiveIntegerField(default=0)
+    activo = models.BooleanField(default=True)
+    fecha_inicio = models.DateTimeField(null=True, blank=True)
+    fecha_fin = models.DateTimeField(null=True, blank=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["orden", "id"]
+        indexes = [
+            models.Index(fields=["activo", "orden"], name="banner_activo_orden_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Banner #{self.id} ({self.tipo}, orden={self.orden})"
+
+    def clean(self):
+        if self.fecha_inicio and self.fecha_fin and self.fecha_inicio > self.fecha_fin:
+            raise ValidationError(
+                "La fecha de inicio no puede ser posterior a la fecha de fin."
+            )
+
+    @property
+    def esta_vigente(self) -> bool:
+        """True si el banner debe mostrarse ahora: activo y dentro de la ventana."""
+        if not self.activo:
+            return False
+        now = timezone.now()
+        if self.fecha_inicio and now < self.fecha_inicio:
+            return False
+        if self.fecha_fin and now > self.fecha_fin:
+            return False
+        return True
