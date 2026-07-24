@@ -31,6 +31,11 @@ from api.views.usuariosViews import MiUsuarioView
 from api.views.productosViews import ProductosListCreate, ProductosRetrieveUpdateDestroy
 from api.views.productoVariantesViews import ProductoVariantesListCreateView, ProductoVariantesDetailView
 from api.views.productosImagenesViews import ProductosImagenesListCreateView, ProductosImagenesDetailView
+from api.views.bannerOfertasViews import (
+    WorkerBannerOfertasListCreate,
+    WorkerBannerOfertasRetrieveUpdateDestroy,
+    BannerOfertasPublicList,
+)
 from api.routes import usuariosURLs
 
 
@@ -85,6 +90,9 @@ urlpatterns = [
     path("descuentos/", DescuentosListCreate.as_view(), name="descuentos-list-create"),
     path("descuentos/<int:id>/", DescuentosRetrieveUpdateDestroy.as_view(), name="descuentos-detail"),
 
+    # Banner de ofertas (público - home)
+    path("banner-ofertas/", BannerOfertasPublicList.as_view(), name="banner-ofertas-public"),
+
     # Carrito
     path("carrito/", carritoViews.carrito_actual, name="carrito-actual"),  # GET
     path("carrito/items/", carritoViews.carrito_add_item, name="carrito-add-item"),  # POST
@@ -114,6 +122,10 @@ urlpatterns = [
     path("worker/descuentos/", WorkerDescuentosListCreate.as_view(), name="worker-descuentos"),
     path("worker/descuentos/tipos/", WorkerDescuentosTiposView.as_view(), name="worker-descuentos-tipos"),
     path("worker/descuentos/<int:id>/", WorkerDescuentosRetrieveUpdateDestroy.as_view(), name="worker-descuentos-detail"),
+
+    # Worker - banner de ofertas
+    path("worker/banner-ofertas/", WorkerBannerOfertasListCreate.as_view(), name="worker-banner-ofertas"),
+    path("worker/banner-ofertas/<int:id>/", WorkerBannerOfertasRetrieveUpdateDestroy.as_view(), name="worker-banner-ofertas-detail"),
 ]
 
 # Signup/Login/Logout legacy + usuarios CRUD (según su archivo routes/usuariosURLs.py)

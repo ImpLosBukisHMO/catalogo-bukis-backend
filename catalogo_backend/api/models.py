@@ -25,6 +25,12 @@ def get_product_image_path(instance, filename):
     return os.path.join("img/products/", filename)
 
 
+def get_banner_oferta_path(instance, filename):
+    ext = filename.split(".")[-1].lower() if "." in filename else "bin"
+    filename = f"{uuid.uuid4()}.{ext}"
+    return os.path.join("img/banner-ofertas/", filename)
+
+
 def default_color_metadata():
     return {"colores": []}
 
