@@ -11,7 +11,6 @@ from ..serializers import (
 from api.models import PedidosModel, PedidoProductosModel
 
 
-
 # ---PEDIDOS VIEWS--- #
 class PedidosListCreate(generics.ListCreateAPIView):
     queryset = PedidosModel.objects.all()
@@ -21,7 +20,7 @@ class PedidosListCreate(generics.ListCreateAPIView):
         serializer = PedidosSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return Response({'mensaje':'Pedido creado existosamente.', 'datos': request.data}, status=status.HTTP_201_CREATED)
+            return Response({'mensaje':'Pedido creado exitosamente.', 'datos': request.data}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def get(self, request, *args, **kwargs):

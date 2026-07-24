@@ -1,12 +1,20 @@
+import threading
+# pyrefly: ignore [missing-import]
+from django.conf import settings
+# pyrefly: ignore [missing-import]
+from api.utils.emails import send_bukis_email
+# pyrefly: ignore [missing-import]
+from django.db import transaction
 # pyrefly: ignore [missing-import]
 from django.db.models import Prefetch
-
 # pyrefly: ignore [missing-import]
 from rest_framework.views import APIView
+# pyrefly: ignore [missing-import]
 from rest_framework.response import Response
+# pyrefly: ignore [missing-import]
 from rest_framework.permissions import IsAuthenticated
+# pyrefly: ignore [missing-import]
 from rest_framework import status, generics
-
 from api.permissions import IsWorker
 from api.models import (
     ProductosModel,
@@ -155,6 +163,7 @@ class WorkerCambiarEstadoView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         pedido.estado = serializer.validated_data["estado"]
+        mail_subject = ""
 
         if serializer.validated_data.get("nota_worker"):
             pedido.nota_worker = serializer.validated_data["nota_worker"]
@@ -163,6 +172,87 @@ class WorkerCambiarEstadoView(APIView):
             pedido.denegado_razon = serializer.validated_data["denegado_razon"]
 
         pedido.save(update_fields=["estado", "nota_worker", "denegado_razon", "updated_at"])
+
+        # Enviar correo fuera de la transacción para no bloquear la base de datos
+        customer_name = f"{pedido.cliente.nombre} {pedido.cliente.apellido}"
+        customer_email = pedido.cliente.correo
+        folio = pedido.folio
+        bank_name = settings.BANK_NAME
+        bank_account_name = settings.BANK_ACCOUNT_NAME
+        bank_account_ref = settings.BANK_ACCOUNT_REF
+        
+        if pedido.estado == PedidosModel.EstadoPedido.PENDIENTE:
+            additional_notes = pedido.nota_worker if (pedido.nota_worker != None) and (pedido.nota_worker != "") else "Ninguna."
+            mail_subject = "📋 Su pedido está siendo revisado | Importaciones Los Bukis"
+            mail_body = (
+                f'<p style="font-size: 1.3em;">Su pedido con el folio <b>{folio}</b> está siendo revisado. Pronto le avisaremos si fue aprobado o denegado.</p>'
+                f'<p style="font-size: 1.3em;"><b>Notas adicionales: </b>{additional_notes}</p>'
+            )
+        elif pedido.estado == PedidosModel.EstadoPedido.APROBADO:
+            additional_notes = pedido.nota_worker if (pedido.nota_worker != None) and (pedido.nota_worker != "") else "Ninguna."
+            mail_subject = "👍 Su pedido ha sido aprobado | Importaciones Los Bukis"
+            mail_body = (
+                f'<p style="font-size: 1.3em;">Su pedido con el folio <b>{folio}</b> ha sido <span style="color: #b45309;"><b>{pedido.get_estado_display().upper()}.</b></span>'
+                f' Es necesario subir la evidencia del pago de este pedido en la plataforma dentro de las siguientes <b>48 horas</b> para que no sea cancelado.</p>'
+                f'<ul><li><p style="font-size: 1.3em;"><b>Información de pago:</b></p>'
+                f'<ul><li><p style="font-size: 1.3em;"><b>Nombre:</b> {bank_account_name}</p></li>'
+                f'<li><p style="font-size: 1.3em;"><b>Referencia:</b> {bank_account_ref}</p></li>'
+                f'<li><p style="font-size: 1.3em;"><b>Banco:</b> {bank_name}</p></li></ul></li>'
+                f'<li><p style="font-size: 1.3em;"><b>Notas adicionales: </b>{additional_notes}</p></li></ul>'
+            )
+        elif pedido.estado == PedidosModel.EstadoPedido.DENEGADO:
+            rejection_note = pedido.denegado_razon if (pedido.denegado_razon != None) and (pedido.denegado_razon != "") else "Ninguno."
+            additional_notes = pedido.nota_worker if (pedido.nota_worker != None) and (pedido.nota_worker != "") else "Ninguna."
+            mail_subject = "❌ Su pedido ha sido denegado | Importaciones Los Bukis"
+            mail_body = (
+                f'<p style="font-size: 1.3em;">Su pedido con el folio <b>{folio}</b> ha sido <span style="color: #b91c1c;"><b>{pedido.get_estado_display().upper()}.</b></span></p>'
+                f'<ul><li><p style="font-size: 1.3em;"><b>Motivo del rechazo: </b>{rejection_note}</p></li>'
+                f'<li><p style="font-size: 1.3em;"><b>Notas adicionales: </b>{additional_notes}</p></li></ul>'
+            )
+        elif pedido.estado == PedidosModel.EstadoPedido.LISTO:
+            additional_notes = pedido.nota_worker if (pedido.nota_worker != None) and (pedido.nota_worker != "") else "Ninguna."
+            mail_subject = "🔔 Su pedido está listo | Importaciones Los Bukis"
+            mail_body = (
+                f'<p style="font-size: 1.3em;">Su pedido con el folio <b>{folio}</b> está <span style="color: #b45309;"><b>{pedido.get_estado_display().upper()}.</b></span></p>'
+                f'<ul><li><p style="font-size: 1.3em;"><b>Instrucciones: </b>Esté al pendiente para cuando se le notifique su envío.</p></li>'
+                f'<li><p style="font-size: 1.3em;"><b>Notas adicionales: </b>{additional_notes}</p></li></ul>'
+            )
+        elif pedido.estado == PedidosModel.EstadoPedido.ENVIADO:
+            additional_notes = pedido.nota_worker if (pedido.nota_worker != None) and (pedido.nota_worker != "") else "Ninguna."
+            mail_subject = "📦 Su pedido ha sido enviado | Importaciones Los Bukis"
+            mail_body = (
+                f'<p style="font-size: 1.3em;">Su pedido con el folio <b>{folio}</b> ha sido <span style="color: #15803d;"><b>{pedido.get_estado_display().upper()}.</b></span></p>'
+                f'<ul><li><p style="font-size: 1.3em;"><b>Indicaciones: </b>Su pedido debería de llegar aproximadamente en 3 días.</p></li>'
+                f'<li><p style="font-size: 1.3em;"><b>Notas adicionales: </b>{additional_notes}</p></li></ul>'
+            )
+        elif pedido.estado == PedidosModel.EstadoPedido.COMPLETADO:
+            additional_notes = pedido.nota_worker if (pedido.nota_worker != None) and (pedido.nota_worker != "") else "Ninguna."
+            mail_subject = "✅ Su pedido ha sido completado | Importaciones Los Bukis"
+            mail_body = (
+                f'<p style="font-size: 1.3em;">Su pedido con el folio <b>{folio}</b> ha sido <span style="color: #1d4ed8;"><b>{pedido.get_estado_display().upper()}.</b></span></p>'
+                f'<ul><li><p style="font-size: 1.3em;"><b>Indicaciones: </b>Por favor, notifíquenos si el pedido llegó completo y sin daño(s).</p></li>'
+                f'<li><p style="font-size: 1.3em;"><b>Notas adicionales: </b>{additional_notes}</p></li></ul>'
+            )
+        elif pedido.estado == PedidosModel.EstadoPedido.CANCELADO:
+            rejection_note = pedido.denegado_razon if (pedido.denegado_razon != None) and (pedido.denegado_razon != "") else "Ninguno."
+            additional_notes = pedido.nota_worker if (pedido.nota_worker != None) and (pedido.nota_worker != "") else "Ninguna."
+            mail_subject = "‼️ Su pedido ha sido cancelado | Importaciones Los Bukis"
+            mail_body = (
+                f'<p style="font-size: 1.3em;">Su pedido con el folio <b>{folio}</b> ha sido <span style="color: #1d4ed8;"><b>{pedido.get_estado_display().upper()}.</b></span></p>'
+                f'<ul><li><p style="font-size: 1.3em;"><b>Motivo de la cancelación: </b>{rejection_note}</p></li>'
+                f'<li><p style="font-size: 1.3em;"><b>Notas adicionales: </b>{additional_notes}</p></li></ul>'
+            )
+        
+
+        try:
+            transaction.on_commit(
+                lambda: threading.Thread(
+                    target=send_bukis_email,
+                    args=(customer_name, customer_email, mail_subject, mail_body)
+                ).start()
+            )
+        except Exception as e:
+            print(f"Error al enviar correo a \"{customer_email}\".\nDetalle(s):\n{e}")
 
         return Response(WorkerPedidoSerializer(pedido).data)
 

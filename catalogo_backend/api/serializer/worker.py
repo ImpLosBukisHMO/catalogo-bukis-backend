@@ -99,6 +99,7 @@ class WorkerPedidoSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "public_id",
+            "folio",
             "cliente",
             "estado",
             "precio_total",
@@ -138,6 +139,7 @@ class WorkerPedidoDetalleSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "public_id",
+            "folio",
             "cliente",
             "estado",
             "precio_total",

@@ -1,10 +1,18 @@
-from django.db import transaction
-from django.db.models import F
+import threading
 import uuid
-
+# pyrefly: ignore [missing-import]
+from api.utils.emails import send_bukis_email
+# pyrefly: ignore [missing-import]
+from django.db import transaction
+# pyrefly: ignore [missing-import]
+from django.db.models import F
+# pyrefly: ignore [missing-import]
 from rest_framework.decorators import api_view, permission_classes
+# pyrefly: ignore [missing-import]
 from rest_framework.permissions import IsAuthenticated, AllowAny
+# pyrefly: ignore [missing-import]
 from rest_framework.response import Response
+# pyrefly: ignore [missing-import]
 from rest_framework import status
 
 from api.models import (
@@ -249,11 +257,27 @@ def carrito_checkout(request):
         pedido.subtotal_snapshot = subtotal
         pedido.precio_total = subtotal
         pedido.save(update_fields=["subtotal_snapshot", "precio_total", "updated_at"])
-
-        # cerrar carrito
+            # cerrar carrito
         cart.estado = "CONVERTED"  # ojo: debe coincidir con tu TextChoices
         cart.save(update_fields=["estado", "updated_at"])
         items.delete()
+
+    # Enviar correo fuera de la transacción para no bloquear la base de datos
+    customer_name = f"{pedido.cliente.nombre} {pedido.cliente.apellido}"
+    customer_email = pedido.cliente.correo
+    order_public_id = pedido.public_id
+    mail_subject = "¡Su pedido ha sido recibido! | Importaciones Los Bukis"
+    mail_body = f'<p style="font-size: 1.3em;">Su pedido con el folio <b>{order_public_id}</b> se encuentra en revisión. Pronto se le notificará si fue aprobado o denegado.</p><br>'
+
+    try:
+        transaction.on_commit(
+            lambda: threading.Thread(
+                target=send_bukis_email,
+                args=(customer_name, customer_email, mail_subject, mail_body)
+            ).start()
+        )
+    except Exception as e:
+        print(f"Error al enviar correo a \"{customer_email}\".\nDetalle(s):\n{e}")
 
     return Response(
         {"ok": True, "pedido_id": pedido.id, "public_id": str(pedido.public_id)},
