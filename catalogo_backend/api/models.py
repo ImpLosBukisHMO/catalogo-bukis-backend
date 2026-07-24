@@ -580,4 +580,27 @@ class PedidoProductosModel(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"Pedido {self.pedido.folio} - Variante {self.variante_id} - Cant {self.cantidad}"
+        return f"Pedido {self.pedido.folio} - Variante {self.variante_id} - Cant {self.cantidad}"# Banners de Oferta
+
+
+class BannerOfertaModel(models.Model):
+    class TipoBanner(models.TextChoices):
+        PROMOCION = "promocion", "Promoción"
+        DESCUENTO = "descuento", "Descuento"
+        GENERAL = "general", "General"
+
+    tipo = models.CharField(max_length=20, choices=TipoBanner.choices, default=TipoBanner.GENERAL)
+    imagen = models.ImageField(upload_to=get_banner_oferta_path)
+    orden = models.PositiveIntegerField(default=0)
+    activo = models.BooleanField(default=True)
+    fecha_inicio = models.DateTimeField()
+    fecha_fin = models.DateTimeField()
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["orden", "id"]
+
+    def __str__(self) -> str:
+        return f"Banner {self.id} - {self.tipo}"
