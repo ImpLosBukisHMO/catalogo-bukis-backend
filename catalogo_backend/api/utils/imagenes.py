@@ -27,23 +27,41 @@ def get_variante_imagen(variante: "ProductoVariantesModel") -> str | None:
         return img_field.url if hasattr(img_field, "url") else (str(img_field) or None)
 
     # Step 1: variant principal image.
-    img = variante.imagenes.filter(es_principal=True).order_by("orden", "id").first()
+    if hasattr(variante, "_cached_variante_imagenes"):
+        # Prefetched + pre-ordered by (orden, id); filter es_principal in Python.
+        img = next(
+            (i for i in variante._cached_variante_imagenes if i.es_principal),
+            None,
+        )
+    else:
+        img = variante.imagenes.filter(es_principal=True).order_by("orden", "id").first()
     if img:
         return _url(img.imagen)
 
     # Step 2: any variant image.
-    img = variante.imagenes.order_by("orden", "id").first()
+    if hasattr(variante, "_cached_variante_imagenes"):
+        img = variante._cached_variante_imagenes[0] if variante._cached_variante_imagenes else None
+    else:
+        img = variante.imagenes.order_by("orden", "id").first()
     if img:
         return _url(img.imagen)
 
     # Step 3: product principal image (not tied to a specific variant).
-    img = (
-        variante.producto.imagenes.filter(variante__isnull=True, es_principal=True)
-        .order_by("orden", "id")
-        .first()
-    )
+    producto = variante.producto
+    if hasattr(producto, "_cached_prod_imagenes"):
+        # Prefetched + pre-ordered by (orden, id); filter es_principal in Python.
+        img = next(
+            (i for i in producto._cached_prod_imagenes if i.es_principal),
+            None,
+        )
+    else:
+        img = (
+            producto.imagenes.filter(variante__isnull=True, es_principal=True)
+            .order_by("orden", "id")
+            .first()
+        )
     if img:
         return _url(img.imagen)
 
     # Step 4: product.imagen fallback field.
-    return _url(variante.producto.imagen)
+    return _url(producto.imagen)

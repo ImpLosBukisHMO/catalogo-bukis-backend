@@ -2,12 +2,15 @@ from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly
 from rest_framework.exceptions import ValidationError
 from api.models import ProductosModel
+from api.pagination import PublicCatalogPagination
 from api.serializers import ProductosSerializer, ProductoDetalleSerializer
 
 
 class ProductosListCreate(generics.ListCreateAPIView):
     serializer_class = ProductosSerializer
     permission_classes = [AllowAny]
+    pagination_class = PublicCatalogPagination
+    http_method_names = ["get", "head", "options"]
 
     def _parse_int(self, value, field_name):
         try:
@@ -30,7 +33,10 @@ class ProductosListCreate(generics.ListCreateAPIView):
     def get_queryset(self):
         qs = (
             ProductosModel.objects
-            .filter(disponible=True)
+            .filter(
+                disponible=True,
+                estado=ProductosModel.EstadoProducto.ACTIVE,
+            )
             .order_by("-id")
             .prefetch_related("producto_colores", "producto_colores__color")
         )
@@ -83,14 +89,13 @@ class ProductosListCreate(generics.ListCreateAPIView):
 class ProductosRetrieveUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
     lookup_field = "id"
     permission_classes = [AllowAny]
+    http_method_names = ["get", "head", "options"]
 
     def get_queryset(self):
-        queryset = ProductosModel.objects.all()
-        if self.request.method == "GET":
-            return queryset.filter(disponible=True)
-        return queryset
+        return ProductosModel.objects.filter(
+            disponible=True,
+            estado=ProductosModel.EstadoProducto.ACTIVE,
+        )
 
     def get_serializer_class(self):
-        if self.request.method == "GET":
-            return ProductoDetalleSerializer
-        return ProductosSerializer
+        return ProductoDetalleSerializer

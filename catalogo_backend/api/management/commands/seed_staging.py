@@ -5,7 +5,7 @@ Seeds the staging database with 8 test scenarios from issue #11
 or real demo products with generated images.
 
 Idempotent — running twice does not duplicate records.
-All seed records use a [SEED] prefix in their names for easy identification.
+All seed records use a [SEED] or [DEMO] prefix in their names for easy identification.
 
 Usage:
     python manage.py seed_staging
@@ -13,14 +13,19 @@ Usage:
     python manage.py seed_staging --clear
     python manage.py seed_staging --real-data
     python manage.py seed_staging --real-data --generate-images
+    python manage.py seed_staging --demo
+    python manage.py seed_staging --demo --dry-run
 """
 
 import os
+import uuid
+import urllib.request
 from io import BytesIO
 
 from django.core.management.base import BaseCommand
 from django.core.files.base import ContentFile
 from django.conf import settings
+from django.db.models import Q
 from PIL import Image, ImageDraw, ImageFont
 
 from api.models import (
@@ -362,11 +367,319 @@ REAL_PRODUCTS = [
     },
 ]
 
+# ----------------------------------------------------------------
+# Demo products (--demo flag)
+# Generic non-Bukis products with picsum.photos images.
+# 20 products across 5 categories — good for testing category filtering.
+# ----------------------------------------------------------------
+DEMO_PREFIX = "[DEMO]"
+
+DEMO_CATEGORIES = [
+    f"{DEMO_PREFIX} Ropa",
+    f"{DEMO_PREFIX} Accesorios",
+    f"{DEMO_PREFIX} Hogar",
+    f"{DEMO_PREFIX} Oficina",
+    f"{DEMO_PREFIX} Tecnología",
+]
+
+DEMO_COLOR_NAMES = [
+    "Negro", "Blanco", "Gris", "Azul", "Rojo",
+    "Verde", "Rosa", "Amarillo", "Naranja", "Morado",
+    "Marrón", "Beige",
+]
+DEMO_COLOR_HEX = {
+    "Negro": "#000000", "Blanco": "#FFFFFF", "Gris": "#808080",
+    "Azul": "#0000FF", "Rojo": "#FF0000", "Verde": "#00FF00",
+    "Rosa": "#FFC0CB", "Amarillo": "#FFFF00", "Naranja": "#FFA500",
+    "Morado": "#800080", "Marrón": "#8B4513", "Beige": "#F5F5DC",
+}
+
+# Each demo product references a category index and variants with color names.
+# Image URLs used as seeds for picsum download (unique per product).
+DEMO_PRODUCTS = [
+    # ---- Ropa (cat 0) ----
+    {
+        "id": 201,
+        "cat": 0,
+        "nombre": f"{DEMO_PREFIX} Camiseta Básica Algodón",
+        "precio": 159.00,
+        "descripcion": "Camiseta 100% algodón peinado, corte regular. Ideal para uso diario.",
+        "peso": 0.20, "medidas": "S-XXL", "capacidad": None, "disponible": True,
+        "picsum_seed": 1001,
+        "variants": [
+            {"color_name": "Negro", "item": "D01-N", "precio": None, "stock": 30, "activo": True},
+            {"color_name": "Blanco", "item": "D01-B", "precio": None, "stock": 25, "activo": True},
+            {"color_name": "Gris", "item": "D01-G", "precio": None, "stock": 20, "activo": True},
+            {"color_name": "Azul", "item": "D01-A", "precio": None, "stock": 15, "activo": True},
+        ],
+    },
+    {
+        "id": 202,
+        "cat": 0,
+        "nombre": f"{DEMO_PREFIX} Camisa Casual Manga Larga",
+        "precio": 349.00,
+        "descripcion": "Camisa de algodón con botones, estilo casual elegante.",
+        "peso": 0.30, "medidas": "S-XXL", "capacidad": None, "disponible": True,
+        "picsum_seed": 1002,
+        "variants": [
+            {"color_name": "Blanco", "item": "D02-B", "precio": None, "stock": 18, "activo": True},
+            {"color_name": "Azul", "item": "D02-A", "precio": None, "stock": 15, "activo": True},
+            {"color_name": "Gris", "item": "D02-G", "precio": None, "stock": 12, "activo": True},
+        ],
+    },
+    {
+        "id": 203,
+        "cat": 0,
+        "nombre": f"{DEMO_PREFIX} Chaqueta Ligera Impermeable",
+        "precio": 599.00,
+        "descripcion": "Chaqueta cortavientos con capucha, repelente al agua. Plegable.",
+        "peso": 0.45, "medidas": "S-XL", "capacidad": None, "disponible": True,
+        "picsum_seed": 1003,
+        "variants": [
+            {"color_name": "Negro", "item": "D03-N", "precio": None, "stock": 10, "activo": True},
+            {"color_name": "Azul", "item": "D03-A", "precio": None, "stock": 8, "activo": True},
+            {"color_name": "Rojo", "item": "D03-R", "precio": None, "stock": 5, "activo": True},
+        ],
+    },
+    {
+        "id": 204,
+        "cat": 0,
+        "nombre": f"{DEMO_PREFIX} Pantalón Cargo Algodón",
+        "precio": 449.00,
+        "descripcion": "Pantalón tipo cargo con múltiples bolsillos, algodón resistente.",
+        "peso": 0.55, "medidas": "28-38", "capacidad": None, "disponible": True,
+        "picsum_seed": 1004,
+        "variants": [
+            {"color_name": "Beige", "item": "D04-BE", "precio": None, "stock": 12, "activo": True},
+            {"color_name": "Negro", "item": "D04-N", "precio": None, "stock": 20, "activo": True},
+            {"color_name": "Verde", "item": "D04-V", "precio": None, "stock": 8, "activo": True},
+        ],
+    },
+    {
+        "id": 205,
+        "cat": 0,
+        "nombre": f"{DEMO_PREFIX} Gorra Clásica Bordada",
+        "precio": 149.00,
+        "descripcion": "Gorra de 6 paneles con bordado frontal y ajuste trasero.",
+        "peso": 0.10, "medidas": "Única ajustable", "capacidad": None, "disponible": True,
+        "picsum_seed": 1005,
+        "variants": [
+            {"color_name": "Negro", "item": "D05-N", "precio": None, "stock": 35, "activo": True},
+            {"color_name": "Azul", "item": "D05-A", "precio": None, "stock": 20, "activo": True},
+            {"color_name": "Rojo", "item": "D05-R", "precio": None, "stock": 15, "activo": True},
+        ],
+    },
+    # ---- Accesorios (cat 1) ----
+    {
+        "id": 206,
+        "cat": 1,
+        "nombre": f"{DEMO_PREFIX} Reloj Minimalista",
+        "precio": 899.00,
+        "descripcion": "Reloj analógico con correa de cuero y esfera limpia.",
+        "peso": 0.08, "medidas": "Correa 20mm, caja 40mm", "capacidad": None, "disponible": True,
+        "picsum_seed": 1006,
+        "variants": [
+            {"color_name": "Negro", "item": "D06-N", "precio": None, "stock": 10, "activo": True},
+            {"color_name": "Marrón", "item": "D06-M", "precio": None, "stock": 8, "activo": True},
+        ],
+    },
+    {
+        "id": 207,
+        "cat": 1,
+        "nombre": f"{DEMO_PREFIX} Mochila Urbana 20L",
+        "precio": 499.00,
+        "descripcion": "Mochila con compartimento acolchado para laptop hasta 15.6\".",
+        "peso": 0.70, "medidas": "42x30x15 cm", "capacidad": "20L", "disponible": True,
+        "picsum_seed": 1007,
+        "variants": [
+            {"color_name": "Negro", "item": "D07-N", "precio": None, "stock": 22, "activo": True},
+            {"color_name": "Gris", "item": "D07-G", "precio": None, "stock": 15, "activo": True},
+            {"color_name": "Azul", "item": "D07-A", "precio": None, "stock": 10, "activo": True},
+        ],
+    },
+    {
+        "id": 208,
+        "cat": 1,
+        "nombre": f"{DEMO_PREFIX} Gafas de Sol Polarizadas",
+        "precio": 329.00,
+        "descripcion": "Gafas con protección UV400 y lentes polarizados.",
+        "peso": 0.04, "medidas": "Puente 18mm, lente 52mm", "capacidad": None, "disponible": True,
+        "picsum_seed": 1008,
+        "variants": [
+            {"color_name": "Negro", "item": "D08-N", "precio": None, "stock": 28, "activo": True},
+            {"color_name": "Marrón", "item": "D08-M", "precio": None, "stock": 15, "activo": True},
+        ],
+    },
+    {
+        "id": 209,
+        "cat": 1,
+        "nombre": f"{DEMO_PREFIX} Billetera Cuero Genuino",
+        "precio": 279.00,
+        "descripcion": "Billetera bifold de cuero genuino con múltiples compartimentos.",
+        "peso": 0.08, "medidas": "11x9x1.5 cm", "capacidad": None, "disponible": True,
+        "picsum_seed": 1009,
+        "variants": [
+            {"color_name": "Marrón", "item": "D09-M", "precio": None, "stock": 18, "activo": True},
+            {"color_name": "Negro", "item": "D09-N", "precio": None, "stock": 25, "activo": True},
+        ],
+    },
+    # ---- Hogar (cat 2) ----
+    {
+        "id": 210,
+        "cat": 2,
+        "nombre": f"{DEMO_PREFIX} Taza Cerámica 350ml",
+        "precio": 99.00,
+        "descripcion": "Taza de cerámica esmaltada apta para microondas y lavavajillas.",
+        "peso": 0.35, "medidas": "10x8x9 cm", "capacidad": "350ml", "disponible": True,
+        "picsum_seed": 1010,
+        "variants": [
+            {"color_name": "Blanco", "item": "D10-B", "precio": None, "stock": 30, "activo": True},
+            {"color_name": "Negro", "item": "D10-N", "precio": None, "stock": 25, "activo": True},
+            {"color_name": "Rojo", "item": "D10-R", "precio": None, "stock": 15, "activo": True},
+        ],
+    },
+    {
+        "id": 211,
+        "cat": 2,
+        "nombre": f"{DEMO_PREFIX} Vela Aromática de Soja",
+        "precio": 189.00,
+        "descripcion": "Vela de cera de soja con esencia natural. 40 horas de duración.",
+        "peso": 0.40, "medidas": "8x8x10 cm", "capacidad": "200g", "disponible": True,
+        "picsum_seed": 1011,
+        "variants": [
+            {"color_name": "Blanco", "item": "D11-B", "precio": None, "stock": 20, "activo": True},
+            {"color_name": "Beige", "item": "D11-BE", "precio": None, "stock": 15, "activo": True},
+        ],
+    },
+    {
+        "id": 212,
+        "cat": 2,
+        "nombre": f"{DEMO_PREFIX} Juego de Posavasos 6pz",
+        "precio": 129.00,
+        "descripcion": "Set de 6 posavasos de cerámica absorbente con base de corcho.",
+        "peso": 0.50, "medidas": "10x10 cm c/u", "capacidad": None, "disponible": True,
+        "picsum_seed": 1012,
+        "variants": [
+            {"color_name": "Gris", "item": "D12-G", "precio": None, "stock": 12, "activo": True},
+            {"color_name": "Marrón", "item": "D12-M", "precio": None, "stock": 8, "activo": True},
+        ],
+    },
+    # ---- Oficina (cat 3) ----
+    {
+        "id": 213,
+        "cat": 3,
+        "nombre": f"{DEMO_PREFIX} Cuaderno A5 Punteado",
+        "precio": 139.00,
+        "descripcion": "Cuaderno A5 de tapa dura con hojas punteadas de 100g/m².",
+        "peso": 0.30, "medidas": "21x14.8x1.5 cm", "capacidad": "160 páginas", "disponible": True,
+        "picsum_seed": 1013,
+        "variants": [
+            {"color_name": "Negro", "item": "D13-N", "precio": None, "stock": 20, "activo": True},
+            {"color_name": "Azul", "item": "D13-A", "precio": None, "stock": 15, "activo": True},
+            {"color_name": "Verde", "item": "D13-V", "precio": None, "stock": 12, "activo": True},
+        ],
+    },
+    {
+        "id": 214,
+        "cat": 3,
+        "nombre": f"{DEMO_PREFIX} Bolígrafo Rodillo Premium",
+        "precio": 79.00,
+        "descripcion": "Bolígrafo con punta de rodillo de 0.7mm, tinta de gel negra.",
+        "peso": 0.02, "medidas": "14x1 cm", "capacidad": None, "disponible": True,
+        "picsum_seed": 1014,
+        "variants": [
+            {"color_name": "Negro", "item": "D14-N", "precio": None, "stock": 50, "activo": True},
+            {"color_name": "Azul", "item": "D14-A", "precio": None, "stock": 40, "activo": True},
+            {"color_name": "Rojo", "item": "D14-R", "precio": None, "stock": 30, "activo": True},
+        ],
+    },
+    {
+        "id": 215,
+        "cat": 3,
+        "nombre": f"{DEMO_PREFIX} Organizador Escritorio Bambú",
+        "precio": 249.00,
+        "descripcion": "Organizador de bambú natural con compartimentos para bolígrafos y accesorios.",
+        "peso": 0.60, "medidas": "20x12x12 cm", "capacidad": None, "disponible": True,
+        "picsum_seed": 1015,
+        "variants": [
+            {"color_name": "Marrón", "item": "D15-M", "precio": None, "stock": 10, "activo": True},
+            {"color_name": "Beige", "item": "D15-BE", "precio": None, "stock": 8, "activo": True},
+        ],
+    },
+    # ---- Tecnología (cat 4) ----
+    {
+        "id": 216,
+        "cat": 4,
+        "nombre": f"{DEMO_PREFIX} Funda Silicona iPhone",
+        "precio": 199.00,
+        "descripcion": "Funda de silicona líquida con interior de microfibra. Antihuellas.",
+        "peso": 0.03, "medidas": "Varía por modelo", "capacidad": None, "disponible": True,
+        "picsum_seed": 1016,
+        "variants": [
+            {"color_name": "Negro", "item": "D16-N", "precio": None, "stock": 40, "activo": True},
+            {"color_name": "Azul", "item": "D16-A", "precio": None, "stock": 30, "activo": True},
+            {"color_name": "Rojo", "item": "D16-R", "precio": None, "stock": 20, "activo": True},
+        ],
+    },
+    {
+        "id": 217,
+        "cat": 4,
+        "nombre": f"{DEMO_PREFIX} Power Bank 10000mAh",
+        "precio": 349.00,
+        "descripcion": "Batería portátil con USB-C y carga rápida 18W. LED indicador.",
+        "peso": 0.22, "medidas": "10x6.5x1.5 cm", "capacidad": "10000mAh", "disponible": True,
+        "picsum_seed": 1017,
+        "variants": [
+            {"color_name": "Negro", "item": "D17-N", "precio": None, "stock": 25, "activo": True},
+            {"color_name": "Blanco", "item": "D17-B", "precio": None, "stock": 20, "activo": True},
+        ],
+    },
+    {
+        "id": 218,
+        "cat": 4,
+        "nombre": f"{DEMO_PREFIX} Audífonos Bluetooth",
+        "precio": 499.00,
+        "descripcion": "Audífonos in-ear inalámbricos con cancelación de ruido y estuche de carga.",
+        "peso": 0.05, "medidas": "Estuche 6x4.5x2.5 cm", "capacidad": None, "disponible": True,
+        "picsum_seed": 1018,
+        "variants": [
+            {"color_name": "Negro", "item": "D18-N", "precio": None, "stock": 15, "activo": True},
+            {"color_name": "Blanco", "item": "D18-B", "precio": None, "stock": 18, "activo": True},
+        ],
+    },
+    {
+        "id": 219,
+        "cat": 4,
+        "nombre": f"{DEMO_PREFIX} Cable USB-C Trenzado 2m",
+        "precio": 129.00,
+        "descripcion": "Cable USB-C a USB-C trenzado de nylon, carga rápida 60W y transferencia de datos.",
+        "peso": 0.08, "medidas": "200 cm", "capacidad": None, "disponible": True,
+        "picsum_seed": 1019,
+        "variants": [
+            {"color_name": "Negro", "item": "D19-N", "precio": None, "stock": 60, "activo": True},
+            {"color_name": "Gris", "item": "D19-G", "precio": None, "stock": 40, "activo": True},
+        ],
+    },
+    {
+        "id": 220,
+        "cat": 4,
+        "nombre": f"{DEMO_PREFIX} Soporte Ajustable Celular",
+        "precio": 179.00,
+        "descripcion": "Soporte de aluminio ajustable para celular y tablet. Base antideslizante.",
+        "peso": 0.35, "medidas": "12x8x15 cm (plegado)", "capacidad": None, "disponible": True,
+        "picsum_seed": 1020,
+        "variants": [
+            {"color_name": "Negro", "item": "D20-N", "precio": None, "stock": 22, "activo": True},
+            {"color_name": "Gris", "item": "D20-G", "precio": None, "stock": 18, "activo": True},
+        ],
+    },
+]
+
 
 class Command(BaseCommand):
     help = (
         "Seed staging database with 8 test scenarios (issue #11). "
-        "Idempotent — records tagged with [SEED] prefix."
+        "Idempotent — records tagged with [SEED] or [DEMO] prefix."
     )
 
     def add_arguments(self, parser):
@@ -378,7 +691,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--clear",
             action="store_true",
-            help="Remove all [SEED]-prefixed records before seeding.",
+            help="Remove all [SEED]- and [DEMO]-prefixed records before seeding.",
         )
         parser.add_argument(
             "--real-data",
@@ -390,7 +703,11 @@ class Command(BaseCommand):
             action="store_true",
             help="Generate product images for seeded products.",
         )
-
+        parser.add_argument(
+            "--demo",
+            action="store_true",
+            help="Seed 20 generic demo products with picsum.photos images for UI testing.",
+        )
     # ------------------------------------------------------------------
     # Image generation
     # ------------------------------------------------------------------
@@ -512,6 +829,152 @@ class Command(BaseCommand):
                 self.stdout.write(f"  ⚠️  Using placeholder for: {product.nombre}")
 
     # ------------------------------------------------------------------
+    # Demo: download image from picsum.photos
+    # ------------------------------------------------------------------
+    def _download_demo_image(self, product_name: str, seed: int) -> str | None:
+        """
+        Download a product image from picsum.photos and save it to the
+        Django ImageField path. Returns the relative path, or None on failure.
+        """
+        url = f"https://picsum.photos/seed/{seed}/400/400"
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "DjangoSeed/1.0"})
+            with urllib.request.urlopen(req, timeout=15) as response:
+                image_data = response.read()
+
+            media_root = settings.MEDIA_ROOT
+            image_dir = os.path.join(media_root, "img", "products")
+            os.makedirs(image_dir, exist_ok=True)
+
+            # Sanitize product name for filename
+            safe_name = product_name.replace("[DEMO]", "").strip().replace(" ", "_")[:40]
+            filename = f"demo_{safe_name}_{seed}.jpg"
+            filepath = os.path.join(image_dir, filename)
+
+            with open(filepath, "wb") as f:
+                f.write(image_data)
+
+            return f"img/products/{filename}"
+
+        except Exception as e:
+            self.stdout.write(f"  ⚠️  Image download failed for {product_name}: {e}")
+            return None
+
+    # ------------------------------------------------------------------
+    # Demo: bootstrap dependencies (categories + colors)
+    # ------------------------------------------------------------------
+    def _bootstrap_demo_dependencies(self, dry_run):
+        """Ensure demo categories and colors exist. Return (cats, color_map)."""
+        if dry_run:
+            return [None] * len(DEMO_CATEGORIES), {name: None for name in DEMO_COLOR_NAMES}
+
+        cats = []
+        for cat_name in DEMO_CATEGORIES:
+            c, created = CategoriasModel.objects.get_or_create(nombre=cat_name)
+            if created:
+                self.stdout.write(f"  Categoría demo creada: {c.nombre}")
+            cats.append(c)
+
+        color_map: dict[str, ColorModel] = {}
+        for name in DEMO_COLOR_NAMES:
+            hex_value = DEMO_COLOR_HEX[name]
+            # Try to find by hex first (since hex is UNIQUE)
+            try:
+                c = ColorModel.objects.get(hex=hex_value)
+            except ColorModel.DoesNotExist:
+                # Create with standard name (not [DEMO] prefixed — these are reusable)
+                c, created = ColorModel.objects.get_or_create(
+                    nombre=name,
+                    defaults={"hex": hex_value},
+                )
+                if created:
+                    self.stdout.write(f"  Color demo creado: {c}")
+            else:
+                self.stdout.write(f"  Color reutilizado: {c}")
+            color_map[name] = c
+
+        return cats, color_map
+
+    # ------------------------------------------------------------------
+    # Demo: seed a single demo product
+    # ------------------------------------------------------------------
+    def _seed_demo_product(
+        self,
+        scenario: dict,
+        categories: list,
+        color_map: dict[str, ColorModel],
+        dry_run: bool,
+    ) -> tuple[ProductosModel | None, list[ProductoVariantesModel], bool]:
+        """
+        Create (or retrieve) one demo product with its variants and image.
+
+        Returns (product, variants, created).
+        """
+        nombre = scenario["nombre"]
+        desc = scenario["descripcion"]
+        cat_idx = scenario.get("cat", 0)
+        seed = scenario.get("picsum_seed", 0)
+
+        if dry_run:
+            return None, [], True
+
+        # Download image first (so we can use it as the default imagen)
+        imagen_path = None
+        if not dry_run and seed:
+            imagen_path = self._download_demo_image(nombre, seed)
+
+        product, created = ProductosModel.objects.get_or_create(
+            nombre=nombre,
+            defaults={
+                "imagen": imagen_path or PLACEHOLDER_IMAGE,
+                "descripcion": desc,
+                "precio": scenario["precio"],
+                "peso": scenario.get("peso", 1.00),
+                "medidas": scenario.get("medidas", "N/A"),
+                "capacidad": scenario.get("capacidad", None),
+                "disponible": scenario["disponible"],
+            },
+        )
+
+        # Assign category
+        if created and categories and cat_idx < len(categories) and categories[cat_idx]:
+            product.categoria = categories[cat_idx]
+            product.save(update_fields=["categoria"])
+
+        variants: list[ProductoVariantesModel] = []
+        for vdef in scenario.get("variants", []):
+            color = color_map[vdef["color_name"]]
+            variant, v_created = ProductoVariantesModel.objects.get_or_create(
+                producto=product,
+                color=color,
+                defaults={
+                    "item": vdef["item"],
+                    "precio": vdef["precio"],
+                    "stock": vdef["stock"],
+                    "activo": vdef.get("activo", True),
+                },
+            )
+            if not v_created:
+                needs_update = False
+                if variant.item != vdef["item"]:
+                    variant.item = vdef["item"]
+                    needs_update = True
+                if variant.precio != vdef["precio"]:
+                    variant.precio = vdef["precio"]
+                    needs_update = True
+                if variant.stock != vdef["stock"]:
+                    variant.stock = vdef["stock"]
+                    needs_update = True
+                if variant.activo != vdef.get("activo", True):
+                    variant.activo = vdef.get("activo", True)
+                    needs_update = True
+                if needs_update:
+                    variant.save(update_fields=["item", "precio", "stock", "activo"])
+            variants.append(variant)
+
+        return product, variants, created
+
+    # ------------------------------------------------------------------
     # Bootstrap: shared dependencies (category + colors)
     # ------------------------------------------------------------------
     def _bootstrap_dependencies(self, dry_run):
@@ -576,7 +1039,8 @@ class Command(BaseCommand):
         )
 
         if created and category:
-            product.categorias.add(category)
+            product.categoria = category
+            product.save(update_fields=["categoria"])
 
         variants: list[ProductoVariantesModel] = []
         for vdef in scenario.get("variants", []):
@@ -614,28 +1078,47 @@ class Command(BaseCommand):
         return product, variants, created
 
     # ------------------------------------------------------------------
-    # Clear: remove all [SEED]-prefixed records
+    # Clear: remove all [SEED] and [DEMO] tagged records
     # ------------------------------------------------------------------
-    def _clear_seed_data(self):
-        """Delete all products, variants, colors, and category tagged with [SEED]."""
+    def _clear_all_seed_data(self):
+        """Delete all products, variants, colors, and categories tagged with [SEED] or [DEMO]."""
 
         # 1. Products (cascades to variants via FK on_delete=CASCADE)
-        products = ProductosModel.objects.filter(nombre__startswith=SEED_PREFIX)
+        # Match both [SEED] and [DEMO] prefixes
+        products = ProductosModel.objects.filter(
+            Q(nombre__startswith=SEED_PREFIX) | Q(nombre__startswith=DEMO_PREFIX)
+        )
         count_p = products.count()
         products.delete()
-        self.stdout.write(f"  Deleted {count_p} seed products (variants cascade-deleted).")
+        self.stdout.write(f"  Deleted {count_p} seed/demo products (variants cascade-deleted).")
 
-        # 2. Seed colors (safe now — no variants reference them)
-        colors = ColorModel.objects.filter(nombre__startswith=f"{SEED_PREFIX} ")
-        count_c = colors.count()
-        colors.delete()
-        self.stdout.write(f"  Deleted {count_c} seed colors.")
+        # 2. Seed colors — only delete if no remaining variants reference them
+        # (protected because demo products may have reused the same colors)
+        try:
+            seed_colors = ColorModel.objects.filter(nombre__startswith=f"{SEED_PREFIX} ")
+            count_c = seed_colors.count()
+            if count_c:
+                seed_colors.delete()
+                self.stdout.write(f"  Deleted {count_c} seed colors.")
+        except Exception:
+            self.stdout.write(f"  ⚠️  Could not delete seed colors (still referenced). Skipping.")
 
         # 3. Seed category
         cat = CategoriasModel.objects.filter(nombre=CATEGORY_NAME).first()
         if cat:
             cat.delete()
             self.stdout.write(f"  Deleted seed category: {CATEGORY_NAME}")
+
+        # 4. Demo categories
+        demo_cats = CategoriasModel.objects.filter(nombre__startswith=f"{DEMO_PREFIX} ")
+        count_dc = demo_cats.count()
+        demo_cats.delete()
+        if count_dc:
+            self.stdout.write(f"  Deleted {count_dc} demo categories.")
+
+    def _clear_seed_data(self):
+        """Backward-compatible wrapper. Calls _clear_all_seed_data()."""
+        self._clear_all_seed_data()
 
     # ------------------------------------------------------------------
     # Main entry point
@@ -644,10 +1127,13 @@ class Command(BaseCommand):
         dry_run = options["dry_run"]
         clear = options["clear"]
         real_data = options["real_data"]
+        demo = options.get("demo", False)
 
         self.stdout.write(self.style.MIGRATE_HEADING("=== Staging Seed Command ==="))
 
-        if real_data:
+        if demo:
+            self.stdout.write(self.style.WARNING("Mode: DEMO (20 generic products with picsum images)\n"))
+        elif real_data:
             self.stdout.write(self.style.WARNING("Mode: REAL DATA (demo products)\n"))
         else:
             self.stdout.write(self.style.WARNING("Mode: TEST SCENARIOS (issue #11)\n"))
@@ -655,74 +1141,134 @@ class Command(BaseCommand):
         # --clear
         if clear:
             if dry_run:
-                existing = ProductosModel.objects.filter(nombre__startswith=SEED_PREFIX).count()
+                existing = ProductosModel.objects.filter(
+                    Q(nombre__startswith=SEED_PREFIX) | Q(nombre__startswith=DEMO_PREFIX)
+                ).count()
                 self.stdout.write(
-                    f"\n🧹 [DRY RUN] Would delete {existing} seed products "
+                    f"\n🧹 [DRY RUN] Would delete {existing} seed/demo products "
                     f"and their dependencies.\n"
                 )
             else:
-                self.stdout.write("\n🧹 Clearing existing seed data...")
-                self._clear_seed_data()
+                self.stdout.write("\n🧹 Clearing existing seed/demo data...")
+                self._clear_all_seed_data()
                 self.stdout.write(self.style.SUCCESS("Clear complete.\n"))
 
-        # Check for pre-existing seed records (idempotency guard)
-        if not dry_run and not real_data:
-            existing_count = ProductosModel.objects.filter(
-                nombre__startswith=SEED_PREFIX
-            ).count()
-            if existing_count > 0 and not clear:
-                self.stdout.write(
-                    self.style.WARNING(
-                        f"Seed records already exist ({existing_count} products). "
-                        "Use --clear to remove them first. Skipping."
+        # Check for pre-existing records (idempotency guard)
+        if not dry_run:
+            if demo:
+                existing_count = ProductosModel.objects.filter(
+                    nombre__startswith=DEMO_PREFIX
+                ).count()
+                if existing_count > 0 and not clear:
+                    self.stdout.write(
+                        self.style.WARNING(
+                            f"Demo records already exist ({existing_count} products). "
+                            "Use --clear to remove them first. Skipping."
+                        )
                     )
+                    return
+            elif not real_data:
+                existing_count = ProductosModel.objects.filter(
+                    nombre__startswith=SEED_PREFIX
+                ).count()
+                if existing_count > 0 and not clear:
+                    self.stdout.write(
+                        self.style.WARNING(
+                            f"Seed records already exist ({existing_count} products). "
+                            "Use --clear to remove them first. Skipping."
+                        )
+                    )
+                    return
+
+        # Select data source and bootstrap
+        if demo:
+            products_to_seed = DEMO_PRODUCTS
+            mode_label = "DEMO"
+
+            self.stdout.write("\n📦 Bootstrapping demo dependencies...")
+            cats, color_map = self._bootstrap_demo_dependencies(dry_run)
+            self.stdout.write(f"  Categories: {len(cats)}")
+            self.stdout.write(f"  Colors: {len(color_map)}\n")
+
+            self.stdout.write(f"\n🌱 Seeding {len(products_to_seed)} {mode_label} products...\n")
+
+            summary_rows: list[dict] = []
+
+            for scenario in products_to_seed:
+                product, variants, created = self._seed_demo_product(
+                    scenario, cats, color_map, dry_run
                 )
-                return
 
-        # Select data source
-        products_to_seed = REAL_PRODUCTS if real_data else SCENARIOS
-        mode_label = "REAL" if real_data else "TEST"
-
-        # Bootstrap shared resources
-        self.stdout.write("\n📦 Bootstrapping shared dependencies...")
-        cat, color_map = self._bootstrap_dependencies(dry_run)
-
-        # Seed each product
-        self.stdout.write(f"\n🌱 Seeding {len(products_to_seed)} {mode_label} products...\n")
-
-        summary_rows: list[dict] = []
-
-        for scenario in products_to_seed:
-            product, variants, created = self._seed_product(
-                scenario, cat, color_map, dry_run
-            )
-
-            n_variants = len(variants)
-            active_variants = (
-                sum(1 for v in variants if v.activo) if not dry_run else 0
-            )
-            status = "would create" if dry_run else ("CREATED" if created else "already exists")
-
-            summary_rows.append({
-                "id": scenario.get("id", "-"),
-                "name": scenario.get("name", scenario["nombre"]),
-                "product": scenario["nombre"],
-                "variants": n_variants,
-                "active": active_variants if not dry_run else "-",
-                "status": status,
-            })
-
-            if dry_run:
-                self.stdout.write(
-                    f"  [{status}] {scenario['nombre']} "
-                    f"({n_variants} variant(s))"
+                n_variants = len(variants)
+                active_variants = (
+                    sum(1 for v in variants if v.activo) if not dry_run else 0
                 )
-            else:
-                label = scenario.get("name", scenario["nombre"])
-                self.stdout.write(
-                    f"  [{status}] {label:<40} "
-                    f"| variants={n_variants} | active={active_variants}"
+                status = "would create" if dry_run else ("CREATED" if created else "already exists")
+
+                summary_rows.append({
+                    "id": scenario["id"],
+                    "name": scenario["nombre"],
+                    "product": scenario["nombre"],
+                    "variants": n_variants,
+                    "active": active_variants if not dry_run else "-",
+                    "status": status,
+                })
+
+                if dry_run:
+                    self.stdout.write(
+                        f"  [{status}] {scenario['nombre']} "
+                        f"({n_variants} variant(s))"
+                    )
+                else:
+                    self.stdout.write(
+                        f"  [{status}] {scenario['nombre']:<42} "
+                        f"| variants={n_variants} | active={active_variants}"
+                    )
+
+        else:
+            products_to_seed = REAL_PRODUCTS if real_data else SCENARIOS
+            mode_label = "REAL" if real_data else "TEST"
+
+            # Bootstrap shared resources
+            self.stdout.write("\n📦 Bootstrapping shared dependencies...")
+            cat, color_map = self._bootstrap_dependencies(dry_run)
+
+            # Seed each product
+            self.stdout.write(f"\n🌱 Seeding {len(products_to_seed)} {mode_label} products...\n")
+
+            summary_rows: list[dict] = []
+
+            for scenario in products_to_seed:
+                product, variants, created = self._seed_product(
+                    scenario, cat, color_map, dry_run
                 )
+
+                n_variants = len(variants)
+                active_variants = (
+                    sum(1 for v in variants if v.activo) if not dry_run else 0
+                )
+                status = "would create" if dry_run else ("CREATED" if created else "already exists")
+
+                summary_rows.append({
+                    "id": scenario.get("id", "-"),
+                    "name": scenario.get("name", scenario["nombre"]),
+                    "product": scenario["nombre"],
+                    "variants": n_variants,
+                    "active": active_variants if not dry_run else "-",
+                    "status": status,
+                })
+
+                if dry_run:
+                    self.stdout.write(
+                        f"  [{status}] {scenario['nombre']} "
+                        f"({n_variants} variant(s))"
+                    )
+                else:
+                    label = scenario.get("name", scenario["nombre"])
+                    self.stdout.write(
+                        f"  [{status}] {label:<40} "
+                        f"| variants={n_variants} | active={active_variants}"
+                    )
 
         # Summary table
         self.stdout.write("\n" + "=" * 70)
@@ -734,20 +1280,21 @@ class Command(BaseCommand):
         for row in summary_rows:
             total_products += 1
             total_variants += row["variants"]
+            name = row["name"]
             self.stdout.write(
-                f"  {row['id']:<4} {row['name']:<42} "
+                f"  {row['id']:<4} {name[:42]:<42} "
                 f"variants={row['variants']:<3} [{row['status']}]"
             )
 
         self.stdout.write("-" * 70)
-        mode_label = " (DRY RUN — nothing saved)" if dry_run else ""
+        suffix = " (DRY RUN — nothing saved)" if dry_run else ""
         self.stdout.write(
-            f"  Total: {total_products} products, {total_variants} variants{mode_label}"
+            f"  Total: {total_products} products, {total_variants} variants{suffix}"
         )
         self.stdout.write("=" * 70)
 
-        # Generate images if requested
-        if not dry_run and options["generate_images"]:
+        # Generate images if requested (not for demo — demo already downloads images)
+        if not dry_run and not demo and options.get("generate_images"):
             self.stdout.write("\n")
             seeded_products = ProductosModel.objects.filter(
                 nombre__startswith=SEED_PREFIX if not real_data else ""

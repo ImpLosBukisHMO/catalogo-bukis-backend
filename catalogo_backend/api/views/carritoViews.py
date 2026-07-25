@@ -1,10 +1,18 @@
-from django.db import transaction
-from django.db.models import F
+import threading
 import uuid
-
+# pyrefly: ignore [missing-import]
+from api.utils.emails import send_bukis_email
+# pyrefly: ignore [missing-import]
+from django.db import transaction
+# pyrefly: ignore [missing-import]
+from django.db.models import F
+# pyrefly: ignore [missing-import]
 from rest_framework.decorators import api_view, permission_classes
+# pyrefly: ignore [missing-import]
 from rest_framework.permissions import IsAuthenticated, AllowAny
+# pyrefly: ignore [missing-import]
 from rest_framework.response import Response
+# pyrefly: ignore [missing-import]
 from rest_framework import status
 
 from api.models import (
@@ -30,6 +38,15 @@ def _get_or_create_active_cart(user):
         defaults={},
     )
     return cart
+
+
+def _is_public_product_variant(variante):
+    producto = variante.producto
+    return (
+        variante.activo
+        and producto.estado == producto.EstadoProducto.ACTIVE
+        and producto.disponible is True
+    )
 
 
 @api_view(["GET"])
@@ -69,6 +86,12 @@ def carrito_add_item(request):
             return Response(
                 {"detail": "Variante no encontrada o inactiva."},
                 status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not _is_public_product_variant(variante):
+            return Response(
+                {"detail": "La variante no está disponible para la venta pública."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         if variante.stock < cantidad:
@@ -169,6 +192,11 @@ def carrito_checkout(request):
                     {"detail": "Una variante del carrito ya no existe."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+            if not _is_public_product_variant(v):
+                return Response(
+                    {"detail": f"La variante {v.id} ya no está disponible para la venta pública."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             if v.stock < it.cantidad:
                 return Response(
                     {"detail": f"Stock insuficiente para la variante {v.id}."},
@@ -209,6 +237,7 @@ def carrito_checkout(request):
                 color_nombre_snapshot=c.nombre,
                 color_hex_snapshot=c.hex,
                 precio_unitario_snapshot=precio_unit,
+                descuento_porcentaje_snapshot=p.descuento_activo if p.descuento_activo is not None else 0,
                 subtotal_linea_snapshot=subtotal_linea,
                 imagen_principal_snapshot=imagen_snapshot,
                 # legacy (opcional)
@@ -228,11 +257,27 @@ def carrito_checkout(request):
         pedido.subtotal_snapshot = subtotal
         pedido.precio_total = subtotal
         pedido.save(update_fields=["subtotal_snapshot", "precio_total", "updated_at"])
-
-        # cerrar carrito
+            # cerrar carrito
         cart.estado = "CONVERTED"  # ojo: debe coincidir con tu TextChoices
         cart.save(update_fields=["estado", "updated_at"])
         items.delete()
+
+    # Enviar correo fuera de la transacción para no bloquear la base de datos
+    customer_name = f"{pedido.cliente.nombre} {pedido.cliente.apellido}"
+    customer_email = pedido.cliente.correo
+    order_public_id = pedido.public_id
+    mail_subject = "¡Su pedido ha sido recibido! | Importaciones Los Bukis"
+    mail_body = f'<p style="font-size: 1.3em;">Su pedido con el folio <b>{order_public_id}</b> se encuentra en revisión. Pronto se le notificará si fue aprobado o denegado.</p><br>'
+
+    try:
+        transaction.on_commit(
+            lambda: threading.Thread(
+                target=send_bukis_email,
+                args=(customer_name, customer_email, mail_subject, mail_body)
+            ).start()
+        )
+    except Exception as e:
+        print(f"Error al enviar correo a \"{customer_email}\".\nDetalle(s):\n{e}")
 
     return Response(
         {"ok": True, "pedido_id": pedido.id, "public_id": str(pedido.public_id)},

@@ -57,6 +57,7 @@ def _create_product_with_variant(stock: int, precio="100.00") -> ProductoVariant
         peso="0.5",
         medidas="10x10x10",
         disponible=True,
+        estado=ProductosModel.EstadoProducto.ACTIVE,
     )
     variant = ProductoVariantesModel.objects.create(
         producto=product,

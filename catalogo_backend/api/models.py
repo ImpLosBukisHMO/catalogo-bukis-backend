@@ -1,9 +1,16 @@
+# pyrefly: ignore [missing-import]
+from django.core.exceptions import ValidationError
+# pyrefly: ignore [missing-import]
 from django.db import models
+# pyrefly: ignore [missing-import]
 from django.contrib.auth.models import AbstractUser, BaseUserManager
+# pyrefly: ignore [missing-import]
 from django.core.validators import RegexValidator
+# pyrefly: ignore [missing-import]
 from django.db.models import Q
 import uuid
 import os
+# pyrefly: ignore [missing-import]
 from django.utils import timezone
 
 hex_color_validator = RegexValidator(
@@ -16,6 +23,12 @@ def get_product_image_path(instance, filename):
     ext = filename.split(".")[-1]
     filename = f"{uuid.uuid4()}.{ext}"
     return os.path.join("img/products/", filename)
+
+
+def get_banner_oferta_path(instance, filename):
+    ext = filename.split(".")[-1].lower() if "." in filename else "bin"
+    filename = f"{uuid.uuid4()}.{ext}"
+    return os.path.join("img/banner-ofertas/", filename)
 
 
 def default_color_metadata():
@@ -104,10 +117,37 @@ class UsuariosModel(AbstractUser):
     def has_perm(self, perm, obj=None):
         return self.is_admin
 
+# Descuentos.
+class DescuentosModel(models.Model):
+    class DescuentoType(models.TextChoices):
+        GENERAL = "general", "General"
+        ESPECIAL = "especial", "Especial"
+
+    nombre = models.CharField(max_length=150)
+    tipo = models.CharField(max_length=20, choices=DescuentoType.choices, default=DescuentoType.GENERAL)
+    porcentaje = models.DecimalField(max_digits=10, decimal_places=2, null=False, default=0)
+    activo = models.BooleanField(default=False)
+    fecha_inicio = models.DateTimeField()
+    fecha_fin = models.DateTimeField()
+
+    def __str__(self):
+        return self.nombre
+    
+    @property
+    def es_valido(self):
+        hoy = timezone.now()
+        return self.activo and (self.fecha_inicio <= hoy <= self.fecha_fin)
 
 # Categorias de productos.
 class CategoriasModel(models.Model):
     nombre = models.CharField(max_length=50, null=False)
+    descuento_general = models.ForeignKey(
+        DescuentosModel,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="categorias_descuentos"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -117,6 +157,11 @@ class CategoriasModel(models.Model):
 
 # Productos.
 class ProductosModel(models.Model):
+    class EstadoProducto(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        ACTIVE = "active", "Active"
+        ARCHIVED = "archived", "Archived"
+
     nombre = models.CharField(max_length=100, null=False)
     imagen = models.ImageField(upload_to=get_product_image_path, null=False)
     descripcion = models.TextField(default="")
@@ -125,10 +170,18 @@ class ProductosModel(models.Model):
     medidas = models.TextField(null=False)
     capacidad = models.CharField(max_length=50, null=True, blank=True)
     disponible = models.BooleanField(default=True)
-    categorias = models.ManyToManyField(
+    estado = models.CharField(
+        max_length=20,
+        choices=EstadoProducto.choices,
+        default=EstadoProducto.DRAFT,
+        db_index=True,
+    )
+    categoria = models.ForeignKey(
         CategoriasModel,
-        related_name="productos",
-        blank=True
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="productos"
     )
     # Worker Panel: worker dueño del producto (null = producto de admin/sin dueño)
     worker = models.ForeignKey(
@@ -139,11 +192,112 @@ class ProductosModel(models.Model):
         related_name="productos_propios",
         limit_choices_to={"is_staff": True},
     )
+    descuento_especial = models.ForeignKey(
+        DescuentosModel,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="productos_descuentos"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return self.nombre
+
+    def _active_variants_queryset(self):
+        return self.producto_colores.filter(activo=True)
+
+    @staticmethod
+    def _has_non_blank_sku(value):
+        return bool((value or "").strip())
+
+    def get_publish_validation_errors(self):
+        errors = {}
+        active_variants = self._active_variants_queryset()
+
+        if not self.disponible:
+            errors["disponible"] = [
+                "El producto debe estar disponible para publicarse."
+            ]
+
+        if not self.categoria:
+            errors["categoria"] = [
+                "El producto debe tener una categoría para publicarse."
+            ]
+
+        if not active_variants.exists():
+            errors["variantes"] = [
+                "El producto debe tener al menos una variante activa para publicarse."
+            ]
+
+        has_valid_sku = any(
+            self._has_non_blank_sku(variant.item)
+            for variant in active_variants.only("item")
+        )
+        if not has_valid_sku:
+            errors["item"] = [
+                "Al menos una variante activa debe tener un SKU válido para publicarse."
+            ]
+
+        publishable_variants = []
+        for variant in active_variants.prefetch_related("imagenes"):
+            has_valid_price = variant.precio_efectivo is not None and variant.precio_efectivo > 0
+            has_valid_stock = variant.stock > 0
+            has_variant_image = variant.imagenes.exists()
+
+            if (
+                has_valid_price
+                and has_valid_stock
+                and has_variant_image
+                and self._has_non_blank_sku(variant.item)
+            ):
+                publishable_variants.append(variant.id)
+
+        if not active_variants.filter(precio__gt=0).exists() and self.precio <= 0:
+            errors["precio"] = [
+                "Al menos una variante activa debe tener un precio válido para publicarse."
+            ]
+
+        if not active_variants.filter(stock__gt=0).exists():
+            errors["stock"] = [
+                "Al menos una variante activa debe tener stock válido para publicarse."
+            ]
+
+        if not active_variants.filter(imagenes__isnull=False).exists() and not self.imagen:
+            errors["imagenes"] = [
+                "El producto debe tener una imagen base o al menos una variante activa con imagen para poder publicarse."
+            ]
+
+        if not publishable_variants and "variantes" not in errors:
+            errors.setdefault("estado", []).append(
+                "El producto debe tener al menos una variante activa y publicable."
+            )
+
+        return errors
+
+    def validate_can_publish(self):
+        errors = self.get_publish_validation_errors()
+        if errors:
+            raise ValidationError(errors)
+        
+    def get_discounted_price(self, descuento):
+        if descuento.activo:
+            return self.precio - (self.precio * descuento.cantidad) / 100
+        return self.precio
+
+    def get_final_price(self):
+        if self.descuento_especial and self.descuento_especial.activo:
+            return self.get_discounted_price(self.precio, self.descuento_especial)
+        return self.precio
+    
+    @property
+    def descuento_activo(self):
+        if self.descuento_especial and self.descuento_especial.es_valido:
+            return self.descuento_especial.porcentaje
+        elif self.categoria and self.categoria.descuento_general and self.categoria.descuento_general.es_valido:
+            return self.categoria.descuento_general.porcentaje
+        return None
 
 
 # Colores.
@@ -164,7 +318,7 @@ class ColorModel(models.Model):
 # Productos X Color (variantes por color).
 class ProductoVariantesModel(models.Model):
     producto = models.ForeignKey(
-        "ProductosModel",
+        ProductosModel,
         on_delete=models.CASCADE,
         related_name="producto_colores",
     )
@@ -175,6 +329,7 @@ class ProductoVariantesModel(models.Model):
     )
 
     item = models.CharField(max_length=50, null=False, default="")
+    codigo_barras = models.CharField(max_length=30, null=False, blank=True, default="")
     precio = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     stock = models.PositiveIntegerField(default=0)
     activo = models.BooleanField(default=True)
@@ -203,7 +358,19 @@ class ProductoVariantesModel(models.Model):
 
     @property
     def precio_efectivo(self):
-        return self.precio if self.precio is not None else self.producto.precio
+        base_price = self.precio if self.precio is not None else self.producto.precio
+        
+        # Revisar descuento del producto
+        if self.producto.descuento_especial and self.producto.descuento_especial.es_valido:
+            discount_pct = self.producto.descuento_especial.porcentaje
+            return base_price - (base_price * discount_pct / 100)
+        
+        # Revisar descuento de la categoría
+        elif self.producto.categoria and self.producto.categoria.descuento_general and self.producto.categoria.descuento_general.es_valido:
+            discount_pct = self.producto.categoria.descuento_general.porcentaje
+            return base_price - (base_price * discount_pct / 100)
+
+        return base_price
 
 
 # ProductosImagenes (galería y principal por producto o por variante).
@@ -318,21 +485,17 @@ class PedidosModel(models.Model):
     # Transiciones válidas de estado (worker panel)
     TRANSICIONES_VALIDAS = {
         "PENDING": ["APPROVED", "DENIED"],
-        "APPROVED": ["READY"],
-        "READY": ["SHIPPED"],
-        "SHIPPED": ["COMPLETED"],
+        "APPROVED": ["READY", "CANCELED"],
+        "READY": ["SHIPPED", "CANCELED"],
+        "SHIPPED": ["COMPLETED", "CANCELED"],
         "DENIED": [],
         "COMPLETED": [],
-        "CANCELED": [],
+        "CANCELED": ["PENDING"],
     }
 
     cliente = models.ForeignKey(UsuariosModel, on_delete=models.CASCADE, related_name="pedidos")
-
-    # Legacy: respeta lo que ya existe en BD / lo que usa tu compañero
     clave = models.CharField(max_length=255, null=False)
-
-    # Nuevo: id público estable y único para APIs / UI
-    public_id = models.UUIDField(default=uuid.uuid4, editable=False, null=True, blank=True)
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
 
     estado = models.CharField(
         max_length=20,
@@ -366,7 +529,11 @@ class PedidosModel(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"Pedido {self.id} - Cliente {self.cliente_id} - {self.estado}"
+        return f"Pedido {self.folio} - Cliente {self.cliente_id} - {self.estado}"
+
+    @property
+    def folio(self):
+        return f"{self.id:06d}"
 
 
 class PedidoProductosModel(models.Model):
@@ -392,6 +559,8 @@ class PedidoProductosModel(models.Model):
     color_hex_snapshot = models.CharField(max_length=7, null=False, default="")
 
     precio_unitario_snapshot = models.DecimalField(max_digits=10, decimal_places=2, null=False, default=0)
+    # Porcentaje de descuento vigente en el momento del checkout (0 = sin descuento)
+    descuento_porcentaje_snapshot = models.DecimalField(max_digits=5, decimal_places=2, null=False, default=0)
     subtotal_linea_snapshot = models.DecimalField(max_digits=10, decimal_places=2, null=False, default=0)
 
     imagen_principal_snapshot = models.CharField(max_length=500, null=False, default="")
@@ -411,4 +580,52 @@ class PedidoProductosModel(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"Pedido {self.pedido_id} - Variante {self.variante_id} - Cant {self.cantidad}"
+        return f"Pedido {self.pedido.folio} - Variante {self.variante_id} - Cant {self.cantidad}"# Banners de Oferta
+
+
+class BannerOfertaModel(models.Model):
+    """
+    Slide del banner de ofertas mostrado en la home pública.
+    Cada instancia es un archivo (imagen o video) con ordenamiento,
+    activación/desactivación, y ventana opcional de vigencia.
+    """
+
+    class MediaType(models.TextChoices):
+        IMAGEN = "imagen", "Imagen"
+        VIDEO = "video", "Video"
+
+    tipo = models.CharField(max_length=10, choices=MediaType.choices)
+    archivo = models.FileField(upload_to=get_banner_oferta_path)
+    orden = models.PositiveIntegerField(default=0)
+    activo = models.BooleanField(default=True)
+    fecha_inicio = models.DateTimeField(null=True, blank=True)
+    fecha_fin = models.DateTimeField(null=True, blank=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["orden", "id"]
+        indexes = [
+            models.Index(fields=["activo", "orden"], name="banner_activo_orden_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Banner #{self.id} ({self.tipo}, orden={self.orden})"
+
+    def clean(self):
+        if self.fecha_inicio and self.fecha_fin and self.fecha_inicio > self.fecha_fin:
+            raise ValidationError(
+                "La fecha de inicio no puede ser posterior a la fecha de fin."
+            )
+
+    @property
+    def esta_vigente(self) -> bool:
+        """True si el banner debe mostrarse ahora: activo y dentro de la ventana."""
+        if not self.activo:
+            return False
+        now = timezone.now()
+        if self.fecha_inicio and now < self.fecha_inicio:
+            return False
+        if self.fecha_fin and now > self.fecha_fin:
+            return False
+        return True

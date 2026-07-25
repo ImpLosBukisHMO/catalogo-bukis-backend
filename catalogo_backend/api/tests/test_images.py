@@ -1,5 +1,7 @@
 from django.conf import settings
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 
 from rest_framework.test import APIClient
 
@@ -43,6 +45,7 @@ def _create_product(nombre: str, imagen: str = "img/products/default.jpg") -> Pr
         peso="1.00",
         medidas="10x10x10",
         disponible=True,
+        estado=ProductosModel.EstadoProducto.ACTIVE,
     )
 
 def _create_color(nombre: str, hex_value: str) -> ColorModel:
@@ -201,7 +204,7 @@ class VarianteOrderingTest(TestCase):
         _create_variant(producto, color_a)
         response = client.get(f"/api/producto-variantes/?producto={producto.id}")
         self.assertEqual(response.status_code, 200, response.data)
-        self.assertEqual([item["color"]["nombre"] for item in response.data], ["Arena", "Turquesa"])
+        self.assertEqual([item["color"]["nombre"] for item in response.data["results"]], ["Arena", "Turquesa"])
 
     def test_worker_variants_endpoint_uses_model_default_ordering(self):
         client = APIClient()
@@ -216,3 +219,293 @@ class VarianteOrderingTest(TestCase):
         response = client.get("/api/worker/variants/")
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual([item["variant_id"] for item in response.data], [variante_azul.id, variante_rojo.id])
+
+
+def _build_worker_variant_dataset(n: int, color_offset: int = 0):
+    """
+    Create N variants with mixed image scenarios covering all four fallback branches:
+      - Variant with principal image (step 1)
+      - Variant with any image but no principal (step 2)
+      - Variant with no images but product has principal image (step 3)
+      - Variant with no images and product has no gallery images (step 4 / default)
+    """
+    colors = []
+    variants = []
+    hex_digits = "0123456789ABCDEF"
+
+    for i in range(n):
+        # Generate a unique hex color.
+        offset = color_offset + i
+        r = (offset * 37 + 10) % 256
+        g = (offset * 59 + 80) % 256
+        b = (offset * 83 + 150) % 256
+        hex_val = f"#{r:02X}{g:02X}{b:02X}"
+        color = _create_color(f"Color-{color_offset}-{i}", hex_val)
+        colors.append(color)
+
+    for i, color in enumerate(colors):
+        branch = i % 4  # 0=step1, 1=step2, 2=step3, 3=step4
+        product_imagen = f"img/products/p{color_offset}-{i}-default.jpg"
+        producto = _create_product(f"Prod-{color_offset}-{i}", imagen=product_imagen)
+        variante = _create_variant(producto, color)
+
+        if branch == 0:
+            # Step 1: variant has a principal image.
+            _attach_image(
+                producto,
+                variante=variante,
+                path=f"img/products/galeria/v-principal-{color_offset}-{i}.jpg",
+                es_principal=True,
+                orden=0,
+            )
+        elif branch == 1:
+            # Step 2: variant has an image but not principal.
+            _attach_image(
+                producto,
+                variante=variante,
+                path=f"img/products/galeria/v-any-{color_offset}-{i}.jpg",
+                es_principal=False,
+                orden=1,
+            )
+        elif branch == 2:
+            # Step 3: no variant image; product has a principal image.
+            _attach_image(
+                producto,
+                path=f"img/products/galeria/p-principal-{color_offset}-{i}.jpg",
+                es_principal=True,
+                orden=0,
+            )
+        # branch == 3: step 4 — no gallery images, only producto.imagen field.
+
+        variants.append(variante)
+
+    return variants
+
+
+class WorkerVariantListQueryCountTest(TestCase):
+    """
+    Invariant: the total SQL query count for GET /api/worker/variants/ MUST be
+    constant regardless of the number of variants returned.
+
+    RED expectation: before the double-Prefetch is wired in WorkerVariantListView,
+    the query count grows linearly with N (N+1 problem), so the counts for
+    N=1, N=5, and N=20 will differ and the assertion will FAIL.
+    """
+
+    def setUp(self):
+        self.worker = _create_user("worker-qcount@test.com", staff=True)
+
+    def _get_query_count(self, client: APIClient) -> int:
+        with CaptureQueriesContext(connection) as ctx:
+            response = client.get("/api/worker/variants/")
+        self.assertEqual(response.status_code, 200, response.data)
+        return len(ctx)
+
+    def test_query_count_is_constant_for_n_equals_1_5_and_20(self):
+        """Core invariant: count(N=1) == count(N=5) == count(N=20)."""
+        client = APIClient()
+        client.force_authenticate(user=self.worker)
+
+        _build_worker_variant_dataset(1, color_offset=100)
+        count_1 = self._get_query_count(client)
+
+        _build_worker_variant_dataset(4, color_offset=200)
+        count_5 = self._get_query_count(client)
+
+        # Add 15 more to reach 20 total (cumulative DB state within the same test).
+        _build_worker_variant_dataset(15, color_offset=300)
+        count_20 = self._get_query_count(client)
+
+        self.assertEqual(
+            count_1,
+            count_5,
+            msg=(
+                f"N+1 detected: query count changed from {count_1} (N=1) to "
+                f"{count_5} (N=5). WorkerVariantListView must keep the count constant."
+            ),
+        )
+        self.assertEqual(
+            count_5,
+            count_20,
+            msg=(
+                f"N+1 detected: query count changed from {count_5} (N=5) to "
+                f"{count_20} (N=20). WorkerVariantListView must keep the count constant."
+            ),
+        )
+
+
+class WorkerVariantListResponseContractTest(TestCase):
+    def setUp(self):
+        self.worker = _create_user("worker-contract@test.com", staff=True)
+
+    def test_response_shape_and_imagen_principal_contract_remain_unchanged(self):
+        client = APIClient()
+        client.force_authenticate(user=self.worker)
+
+        color_a = _create_color("Contract-A", "#AA0001")
+        color_b = _create_color("Contract-B", "#AA0002")
+        color_c = _create_color("Contract-C", "#AA0003")
+        color_d = _create_color("Contract-D", "#AA0004")
+        color_e = _create_color("Contract-E", "#AA0005")
+
+        variant_principal_product = _create_product("Contract Variant Principal")
+        variant_principal = _create_variant(variant_principal_product, color_a)
+        _attach_image(
+            variant_principal_product,
+            variante=variant_principal,
+            path="img/products/galeria/contract-variant-principal.jpg",
+            es_principal=True,
+            orden=0,
+        )
+
+        variant_any_product = _create_product("Contract Variant Any")
+        variant_any = _create_variant(variant_any_product, color_b)
+        _attach_image(
+            variant_any_product,
+            variante=variant_any,
+            path="img/products/galeria/contract-variant-any.jpg",
+            orden=1,
+        )
+
+        product_principal_product = _create_product("Contract Product Principal")
+        product_principal = _create_variant(product_principal_product, color_c)
+        _attach_image(
+            product_principal_product,
+            path="img/products/galeria/contract-product-principal.jpg",
+            es_principal=True,
+            orden=0,
+        )
+
+        product_default = _create_variant(
+            _create_product("Contract Product Default", imagen="img/products/contract-default.jpg"),
+            color_d,
+        )
+        no_image = _create_variant(_create_product("Contract None", imagen=""), color_e)
+
+        variants = [
+            variant_principal,
+            variant_any,
+            product_principal,
+            product_default,
+            no_image,
+        ]
+
+        response = client.get("/api/worker/variants/")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(len(response.data), len(variants))
+
+        expected_fields = set(WorkerVariantApiSerializer.Meta.fields)
+        expected_by_id = {
+            variant.id: WorkerVariantApiSerializer(variant).data
+            for variant in variants
+        }
+        actual_by_id = {
+            item["variant_id"]: item
+            for item in response.data
+        }
+
+        self.assertEqual(set(actual_by_id), set(expected_by_id))
+
+        for variant_id, expected_item in expected_by_id.items():
+            actual_item = actual_by_id[variant_id]
+            self.assertEqual(set(actual_item.keys()), expected_fields)
+            self.assertEqual(actual_item, expected_item)
+            self.assertTrue(
+                isinstance(actual_item["imagen_principal"], str)
+                or actual_item["imagen_principal"] is None
+            )
+
+        imagenes = [item["imagen_principal"] for item in response.data]
+        self.assertIn(None, imagenes)
+        self.assertIn(_media_url("img/products/contract-default.jpg"), imagenes)
+
+
+class VarianteImageHelperCacheBranchTest(TestCase):
+    """
+    Unit tests for the prefetch-cache code path in get_variante_imagen().
+
+    These tests verify that setting variante.producto._cached_prod_imagenes
+    eliminates the step-3 DB query. They measure the query count with and
+    without the cache attribute on the SAME variant object (no fresh fetch
+    needed — step 3 is stateless across calls when no variant images exist).
+
+    RED expectation: before the hasattr-gated branch exists in imagenes.py,
+    setting _cached_prod_imagenes has no effect — step 3 always queries,
+    so count_with == count_without. The assertEqual(count_without - 1, count_with)
+    assertion will FAIL.
+    """
+
+    def setUp(self):
+        producto = _create_product("Cache Branch Prod", imagen="img/products/cache-default.jpg")
+        self.variante = _create_variant(producto, _create_color("CacheColor", "#CACACA"))
+        self.producto = producto
+
+    def _baseline_query_count(self) -> int:
+        """Return query count for a normal call (no cache attribute set)."""
+        # Ensure no cache attribute leaks from a previous run.
+        if hasattr(self.producto, "_cached_prod_imagenes"):
+            del self.producto._cached_prod_imagenes
+        with CaptureQueriesContext(connection) as ctx:
+            get_variante_imagen(self.variante)
+        return len(ctx)
+
+    def test_step3_reads_from_prefetch_cache_attribute(self):
+        """
+        When variante.producto._cached_prod_imagenes is populated with a
+        principal image, get_variante_imagen() must skip the step-3 DB query.
+
+        Proof: query count WITH cache set is exactly 1 less than baseline.
+        The saved query is the step-3 'product principal image' lookup.
+        """
+        count_without = self._baseline_query_count()
+
+        cached_img = ProductosImagenesModel(
+            producto=self.producto,
+            variante=None,
+            imagen="img/products/galeria/cached-principal.jpg",
+            es_principal=True,
+            orden=0,
+        )
+        self.producto._cached_prod_imagenes = [cached_img]
+
+        with CaptureQueriesContext(connection) as ctx_with:
+            result = get_variante_imagen(self.variante)
+        count_with = len(ctx_with)
+
+        self.assertEqual(
+            count_without - 1,
+            count_with,
+            msg=(
+                f"Expected cache to save exactly 1 query (step 3). "
+                f"Without cache: {count_without}, with cache: {count_with}."
+            ),
+        )
+        self.assertEqual(result, _media_url("img/products/galeria/cached-principal.jpg"))
+
+    def test_step3_cache_populated_but_empty_falls_through_to_step4(self):
+        """
+        When _cached_prod_imagenes is an empty list (no product-level principal
+        image), get_variante_imagen() must fall through to step 4 WITHOUT
+        issuing a step-3 DB query.
+
+        Proof: query count WITH empty cache is exactly 1 less than baseline.
+        """
+        count_without = self._baseline_query_count()
+
+        self.producto._cached_prod_imagenes = []
+
+        with CaptureQueriesContext(connection) as ctx_with:
+            result = get_variante_imagen(self.variante)
+        count_with = len(ctx_with)
+
+        self.assertEqual(
+            count_without - 1,
+            count_with,
+            msg=(
+                f"Expected empty cache to save exactly 1 query (step 3). "
+                f"Without cache: {count_without}, with cache: {count_with}."
+            ),
+        )
+        # Falls through to step 4: producto.imagen field.
+        self.assertEqual(result, _media_url("img/products/cache-default.jpg"))

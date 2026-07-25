@@ -21,6 +21,7 @@ def _create_product(
     nombre: str,
     *,
     disponible: bool = True,
+    estado: str = ProductosModel.EstadoProducto.ACTIVE,
     worker: UsuariosModel | None = None,
 ) -> ProductosModel:
     return ProductosModel.objects.create(
@@ -31,6 +32,7 @@ def _create_product(
         peso=Decimal("1.00"),
         medidas="10x10x10",
         disponible=disponible,
+        estado=estado,
         worker=worker,
     )
 
@@ -63,7 +65,7 @@ class ProductAvailabilityCurrentBehaviorTest(TestCase):
         response = client.get("/api/productos/")
 
         self.assertEqual(response.status_code, 200, response.data)
-        self.assertNotIn(producto.id, [item["id"] for item in response.data])
+        self.assertNotIn(producto.id, [item["id"] for item in response.data["results"]])
 
     def test_disponible_true_product_appears(self):
         client = APIClient()
@@ -73,7 +75,7 @@ class ProductAvailabilityCurrentBehaviorTest(TestCase):
         response = client.get("/api/productos/")
 
         self.assertEqual(response.status_code, 200, response.data)
-        self.assertIn(producto.id, [item["id"] for item in response.data])
+        self.assertIn(producto.id, [item["id"] for item in response.data["results"]])
 
     def test_disponible_false_returns_404_on_detail(self):
         client = APIClient()
@@ -88,7 +90,12 @@ class ProductAvailabilityCurrentBehaviorTest(TestCase):
         client = APIClient()
         worker = _create_user("worker-availability@test.com", staff=True)
         client.force_authenticate(user=worker)
-        producto = _create_product("Worker Hidden", disponible=False, worker=worker)
+        producto = _create_product(
+            "Worker Hidden",
+            disponible=False,
+            estado=ProductosModel.EstadoProducto.DRAFT,
+            worker=worker,
+        )
         _create_variant(producto, _create_color("Negro availability", "#111111"), stock=3)
 
         response = client.patch(
