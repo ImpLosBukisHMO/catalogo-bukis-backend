@@ -397,9 +397,12 @@ class WorkerCambiarEstadoSerializer(serializers.Serializer):
                 f"Transición inválida: '{estado_actual}' → '{estado_nuevo}'. "
                 f"Transiciones permitidas: {transiciones or 'ninguna'}."
             )
-        if estado_nuevo == PedidosModel.EstadoPedido.DENEGADO and not data.get("denegado_razon"):
+        if estado_nuevo in {
+            PedidosModel.EstadoPedido.DENEGADO,
+            PedidosModel.EstadoPedido.CANCELADO,
+        } and not data.get("denegado_razon"):
             raise serializers.ValidationError(
-                "Se requiere 'denegado_razon' para denegar un pedido."
+                "Se requiere 'denegado_razon' para denegar o cancelar un pedido."
             )
         return data
 

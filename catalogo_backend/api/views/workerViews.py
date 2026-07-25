@@ -2,7 +2,7 @@ import threading
 # pyrefly: ignore [missing-import]
 from django.conf import settings
 # pyrefly: ignore [missing-import]
-from api.utils.emails import send_bukis_email
+from api.utils.emails import escape_email_text, send_bukis_email
 # pyrefly: ignore [missing-import]
 from django.db import transaction
 # pyrefly: ignore [missing-import]
@@ -149,6 +149,10 @@ class WorkerPedidoDetailView(APIView):
 class WorkerCambiarEstadoView(APIView):
     permission_classes = [IsAuthenticated, IsWorker]
 
+    @staticmethod
+    def _email_text(value, default):
+        return escape_email_text(value, default)
+
     def patch(self, request, pedido_id):
         try:
             pedido = PedidosModel.objects.get(pk=pedido_id)
@@ -177,19 +181,19 @@ class WorkerCambiarEstadoView(APIView):
         customer_name = f"{pedido.cliente.nombre} {pedido.cliente.apellido}"
         customer_email = pedido.cliente.correo
         folio = pedido.folio
-        bank_name = settings.BANK_NAME
-        bank_account_name = settings.BANK_ACCOUNT_NAME
-        bank_account_ref = settings.BANK_ACCOUNT_REF
+        bank_name = self._email_text(settings.BANK_NAME, "")
+        bank_account_name = self._email_text(settings.BANK_ACCOUNT_NAME, "")
+        bank_account_ref = self._email_text(settings.BANK_ACCOUNT_REF, "")
         
         if pedido.estado == PedidosModel.EstadoPedido.PENDIENTE:
-            additional_notes = pedido.nota_worker if (pedido.nota_worker != None) and (pedido.nota_worker != "") else "Ninguna."
+            additional_notes = self._email_text(pedido.nota_worker, "Ninguna.")
             mail_subject = "📋 Su pedido está siendo revisado | Importaciones Los Bukis"
             mail_body = (
                 f'<p style="font-size: 1.3em;">Su pedido con el folio <b>{folio}</b> está siendo revisado. Pronto le avisaremos si fue aprobado o denegado.</p>'
                 f'<p style="font-size: 1.3em;"><b>Notas adicionales: </b>{additional_notes}</p>'
             )
         elif pedido.estado == PedidosModel.EstadoPedido.APROBADO:
-            additional_notes = pedido.nota_worker if (pedido.nota_worker != None) and (pedido.nota_worker != "") else "Ninguna."
+            additional_notes = self._email_text(pedido.nota_worker, "Ninguna.")
             mail_subject = "👍 Su pedido ha sido aprobado | Importaciones Los Bukis"
             mail_body = (
                 f'<p style="font-size: 1.3em;">Su pedido con el folio <b>{folio}</b> ha sido <span style="color: #b45309;"><b>{pedido.get_estado_display().upper()}.</b></span>'
@@ -201,8 +205,8 @@ class WorkerCambiarEstadoView(APIView):
                 f'<li><p style="font-size: 1.3em;"><b>Notas adicionales: </b>{additional_notes}</p></li></ul>'
             )
         elif pedido.estado == PedidosModel.EstadoPedido.DENEGADO:
-            rejection_note = pedido.denegado_razon if (pedido.denegado_razon != None) and (pedido.denegado_razon != "") else "Ninguno."
-            additional_notes = pedido.nota_worker if (pedido.nota_worker != None) and (pedido.nota_worker != "") else "Ninguna."
+            rejection_note = self._email_text(pedido.denegado_razon, "Ninguno.")
+            additional_notes = self._email_text(pedido.nota_worker, "Ninguna.")
             mail_subject = "❌ Su pedido ha sido denegado | Importaciones Los Bukis"
             mail_body = (
                 f'<p style="font-size: 1.3em;">Su pedido con el folio <b>{folio}</b> ha sido <span style="color: #b91c1c;"><b>{pedido.get_estado_display().upper()}.</b></span></p>'
@@ -210,7 +214,7 @@ class WorkerCambiarEstadoView(APIView):
                 f'<li><p style="font-size: 1.3em;"><b>Notas adicionales: </b>{additional_notes}</p></li></ul>'
             )
         elif pedido.estado == PedidosModel.EstadoPedido.LISTO:
-            additional_notes = pedido.nota_worker if (pedido.nota_worker != None) and (pedido.nota_worker != "") else "Ninguna."
+            additional_notes = self._email_text(pedido.nota_worker, "Ninguna.")
             mail_subject = "🔔 Su pedido está listo | Importaciones Los Bukis"
             mail_body = (
                 f'<p style="font-size: 1.3em;">Su pedido con el folio <b>{folio}</b> está <span style="color: #b45309;"><b>{pedido.get_estado_display().upper()}.</b></span></p>'
@@ -218,7 +222,7 @@ class WorkerCambiarEstadoView(APIView):
                 f'<li><p style="font-size: 1.3em;"><b>Notas adicionales: </b>{additional_notes}</p></li></ul>'
             )
         elif pedido.estado == PedidosModel.EstadoPedido.ENVIADO:
-            additional_notes = pedido.nota_worker if (pedido.nota_worker != None) and (pedido.nota_worker != "") else "Ninguna."
+            additional_notes = self._email_text(pedido.nota_worker, "Ninguna.")
             mail_subject = "📦 Su pedido ha sido enviado | Importaciones Los Bukis"
             mail_body = (
                 f'<p style="font-size: 1.3em;">Su pedido con el folio <b>{folio}</b> ha sido <span style="color: #15803d;"><b>{pedido.get_estado_display().upper()}.</b></span></p>'
@@ -226,7 +230,7 @@ class WorkerCambiarEstadoView(APIView):
                 f'<li><p style="font-size: 1.3em;"><b>Notas adicionales: </b>{additional_notes}</p></li></ul>'
             )
         elif pedido.estado == PedidosModel.EstadoPedido.COMPLETADO:
-            additional_notes = pedido.nota_worker if (pedido.nota_worker != None) and (pedido.nota_worker != "") else "Ninguna."
+            additional_notes = self._email_text(pedido.nota_worker, "Ninguna.")
             mail_subject = "✅ Su pedido ha sido completado | Importaciones Los Bukis"
             mail_body = (
                 f'<p style="font-size: 1.3em;">Su pedido con el folio <b>{folio}</b> ha sido <span style="color: #1d4ed8;"><b>{pedido.get_estado_display().upper()}.</b></span></p>'
@@ -234,8 +238,8 @@ class WorkerCambiarEstadoView(APIView):
                 f'<li><p style="font-size: 1.3em;"><b>Notas adicionales: </b>{additional_notes}</p></li></ul>'
             )
         elif pedido.estado == PedidosModel.EstadoPedido.CANCELADO:
-            rejection_note = pedido.denegado_razon if (pedido.denegado_razon != None) and (pedido.denegado_razon != "") else "Ninguno."
-            additional_notes = pedido.nota_worker if (pedido.nota_worker != None) and (pedido.nota_worker != "") else "Ninguna."
+            rejection_note = self._email_text(pedido.denegado_razon, "Ninguno.")
+            additional_notes = self._email_text(pedido.nota_worker, "Ninguna.")
             mail_subject = "‼️ Su pedido ha sido cancelado | Importaciones Los Bukis"
             mail_body = (
                 f'<p style="font-size: 1.3em;">Su pedido con el folio <b>{folio}</b> ha sido <span style="color: #1d4ed8;"><b>{pedido.get_estado_display().upper()}.</b></span></p>'
@@ -399,4 +403,3 @@ class WorkerImagenCreateView(APIView):
 
         serializer.save(producto=producto)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
-

@@ -1,16 +1,23 @@
 # pyrefly: ignore [missing-import]
 from django.core.mail import EmailMultiAlternatives
 # pyrefly: ignore [missing-import]
-from django.utils.html import strip_tags
+from django.utils.html import escape, strip_tags
 # pyrefly: ignore [missing-import]
 from django.conf import settings
 # pyrefly: ignore [missing-import]
 from django.contrib.staticfiles import finders
 from email.mime.image import MIMEImage
 from datetime import date
+from html import unescape
+
+
+def escape_email_text(value, default=""):
+    if value in (None, ""):
+        return default
+    return escape(str(value))
 
 def send_bukis_email(recipient_name, recipient_email, mail_subject, html_body):
-    greeting = f"<h2>Hola, {recipient_name}.</h2>"
+    greeting = f"<h2>Hola, {escape_email_text(recipient_name, 'cliente')}.</h2>"
 
     full_mail = (
         f"{greeting}"
@@ -20,7 +27,7 @@ def send_bukis_email(recipient_name, recipient_email, mail_subject, html_body):
         f'<p style="font-size: 1.1em;">Copyright &copy; {date.today().year} Importaciones Los Bukis.Todos los derechos reservados.<br>Blvd. Solidaridad 118 A, Raquet Club II, 83200 Hermosillo, Sonora, México.</p>'
     )
 
-    body = strip_tags(full_mail)
+    body = unescape(strip_tags(full_mail))
 
     msg = EmailMultiAlternatives(
         subject=mail_subject,
