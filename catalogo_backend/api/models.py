@@ -1,10 +1,16 @@
+# pyrefly: ignore [missing-import]
 from django.core.exceptions import ValidationError
+# pyrefly: ignore [missing-import]
 from django.db import models
+# pyrefly: ignore [missing-import]
 from django.contrib.auth.models import AbstractUser, BaseUserManager
+# pyrefly: ignore [missing-import]
 from django.core.validators import RegexValidator
+# pyrefly: ignore [missing-import]
 from django.db.models import Q
 import uuid
 import os
+# pyrefly: ignore [missing-import]
 from django.utils import timezone
 
 hex_color_validator = RegexValidator(
@@ -479,21 +485,17 @@ class PedidosModel(models.Model):
     # Transiciones válidas de estado (worker panel)
     TRANSICIONES_VALIDAS = {
         "PENDING": ["APPROVED", "DENIED"],
-        "APPROVED": ["READY"],
-        "READY": ["SHIPPED"],
-        "SHIPPED": ["COMPLETED"],
+        "APPROVED": ["READY", "CANCELED"],
+        "READY": ["SHIPPED", "CANCELED"],
+        "SHIPPED": ["COMPLETED", "CANCELED"],
         "DENIED": [],
         "COMPLETED": [],
-        "CANCELED": [],
+        "CANCELED": ["PENDING"],
     }
 
     cliente = models.ForeignKey(UsuariosModel, on_delete=models.CASCADE, related_name="pedidos")
-
-    # Legacy: respeta lo que ya existe en BD / lo que usa tu compañero
     clave = models.CharField(max_length=255, null=False)
-
-    # Nuevo: id público estable y único para APIs / UI
-    public_id = models.UUIDField(default=uuid.uuid4, editable=False, null=True, blank=True)
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
 
     estado = models.CharField(
         max_length=20,
@@ -527,7 +529,11 @@ class PedidosModel(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"Pedido {self.id} - Cliente {self.cliente_id} - {self.estado}"
+        return f"Pedido {self.folio} - Cliente {self.cliente_id} - {self.estado}"
+
+    @property
+    def folio(self):
+        return f"{self.id:06d}"
 
 
 class PedidoProductosModel(models.Model):
@@ -574,7 +580,7 @@ class PedidoProductosModel(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"Pedido {self.pedido_id} - Variante {self.variante_id} - Cant {self.cantidad}"
+        return f"Pedido {self.pedido.folio} - Variante {self.variante_id} - Cant {self.cantidad}"# Banners de Oferta
 
 
 class BannerOfertaModel(models.Model):
@@ -583,6 +589,7 @@ class BannerOfertaModel(models.Model):
     Cada instancia es un archivo (imagen o video) con ordenamiento,
     activación/desactivación, y ventana opcional de vigencia.
     """
+
     class MediaType(models.TextChoices):
         IMAGEN = "imagen", "Imagen"
         VIDEO = "video", "Video"

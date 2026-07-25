@@ -306,9 +306,27 @@ class ProductosFavoritosSerializer(serializers.ModelSerializer):
 # =========================
 
 class PedidosSerializer(serializers.ModelSerializer):
+    folio = serializers.ReadOnlyField()
+
     class Meta:
         model = PedidosModel
-        fields = "__all__"
+        fields = [
+            "id",
+            "cliente",
+            "clave",
+            "public_id",
+            "folio",
+            "estado",
+            "direccion",
+            "subtotal_snapshot",
+            "precio_total",
+            "aprobado_eta",
+            "denegado_razon",
+            "nota_cliente",
+            "nota_worker",
+            "created_at",
+            "updated_at",
+        ]
 
 
 class PedidoProductosSerializer(serializers.ModelSerializer):
@@ -338,12 +356,14 @@ class ClientePedidoItemSerializer(serializers.ModelSerializer):
 
 class ClientePedidoSerializer(serializers.ModelSerializer):
     items = ClientePedidoItemSerializer(many=True, read_only=True)
+    folio = serializers.ReadOnlyField()
 
     class Meta:
         model = PedidosModel
         fields = [
             "id",
             "public_id",
+            "folio",
             "estado",
             "precio_total",
             "subtotal_snapshot",
@@ -358,12 +378,14 @@ class ClientePedidoSerializer(serializers.ModelSerializer):
 
 class ClientePedidoListSerializer(serializers.ModelSerializer):
     items_count = serializers.SerializerMethodField()
+    folio = serializers.ReadOnlyField()
 
     class Meta:
         model = PedidosModel
         fields = [
             "id",
             "public_id",
+            "folio",
             "estado",
             "precio_total",
             "created_at",
