@@ -1,4 +1,7 @@
+import logging
+
 from django.http import Http404
+from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -8,7 +11,13 @@ from ..serializers import (
     ClientePedidoSerializer,
     ClientePedidoListSerializer,
 )
+from api.serializer.client import MiPedidoComprobanteUpdateSerializer
 from api.models import PedidosModel, PedidoProductosModel
+from api.utils.comprobantes import build_comprobante_response
+from api.utils.emails import send_comprobante_pago_worker_email
+
+
+logger = logging.getLogger(__name__)
 
 
 # ---PEDIDOS VIEWS--- #
@@ -137,3 +146,79 @@ class MiPedidoDetalleView(generics.RetrieveAPIView):
             .filter(cliente=self.request.user)
             .prefetch_related("items")
         )
+
+
+class MiPedidoComprobanteUpdateView(generics.GenericAPIView):
+    serializer_class = MiPedidoComprobanteUpdateSerializer
+    permission_classes = [IsAuthenticated]
+    lookup_field = "id"
+
+    @staticmethod
+    def _get_pedido(id):
+        try:
+            return PedidosModel.objects.prefetch_related("items").get(pk=id)
+        except PedidosModel.DoesNotExist:
+            return None
+
+    def get(self, request, id, *args, **kwargs):
+        pedido = self._get_pedido(id)
+        if pedido is None:
+            return Response({"error": "Pedido no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.user.is_staff or pedido.cliente_id != request.user.id:
+            return Response(
+                {"error": "No tienes permiso para ver este pedido."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if not pedido.comprobante_pago:
+            return Response({"error": "El pedido no tiene comprobante."}, status=status.HTTP_404_NOT_FOUND)
+
+        return build_comprobante_response(pedido.comprobante_pago)
+
+    def patch(self, request, id, *args, **kwargs):
+        pedido = self._get_pedido(id)
+        if pedido is None:
+            return Response({"error": "Pedido no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.user.is_staff or pedido.cliente_id != request.user.id:
+            return Response(
+                {"error": "No tienes permiso para modificar este pedido."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if pedido.estado != PedidosModel.EstadoPedido.APROBADO:
+            return Response(
+                {"error": "Solo puedes subir comprobante cuando el pedido está aprobado."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = self.get_serializer(instance=pedido, data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        previous_name = pedido.comprobante_pago.name if pedido.comprobante_pago else None
+        uploaded_file = serializer.validated_data["comprobante_pago"]
+
+        pedido.comprobante_pago.save(uploaded_file.name, uploaded_file, save=False)
+        pedido.updated_at = timezone.now()
+        pedido.save(update_fields=["comprobante_pago", "updated_at"])
+
+        if previous_name and previous_name != pedido.comprobante_pago.name:
+            try:
+                pedido.comprobante_pago.storage.delete(previous_name)
+            except Exception:
+                logger.warning(
+                    "Failed to delete previous comprobante file",
+                    extra={"pedido_id": pedido.id, "file_name": previous_name},
+                )
+
+        try:
+            send_comprobante_pago_worker_email(pedido)
+        except Exception:
+            logger.exception(
+                "Failed to send comprobante upload notification",
+                extra={"pedido_id": pedido.id},
+            )
+
+        pedido.refresh_from_db()
+        return Response(ClientePedidoSerializer(pedido).data, status=status.HTTP_200_OK)

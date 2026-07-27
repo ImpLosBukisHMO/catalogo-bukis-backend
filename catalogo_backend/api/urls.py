@@ -17,6 +17,7 @@ from api.views.workerViews import (
     WorkerVariantListView,
     WorkerPedidoListView,
     WorkerPedidoDetailView,
+    WorkerPedidoComprobanteDownloadView,
     WorkerCambiarEstadoView,
     WorkerProductoListCreateView,
     WorkerProductoUpdateView,
@@ -61,6 +62,7 @@ urlpatterns = [
     # Mis pedidos (cliente autenticado)
     path("mis-pedidos/", pedidosViews.MisPedidosListView.as_view(), name="mis-pedidos"),
     path("mis-pedidos/<int:id>/", pedidosViews.MiPedidoDetalleView.as_view(), name="mi-pedido-detalle"),
+    path("mis-pedidos/<int:id>/comprobante/", pedidosViews.MiPedidoComprobanteUpdateView.as_view(), name="mi-pedido-comprobante"),
 
     # Pedido - Productos
     path("pedido-productos/", pedidosViews.PedidoProductosListCreate.as_view(), name="pedido-producto-view-create"),
@@ -110,6 +112,7 @@ urlpatterns = [
     # Worker - pedidos
     path("worker/pedidos/", WorkerPedidoListView.as_view(), name="worker-pedidos"),
     path("worker/pedidos/<int:pedido_id>/", WorkerPedidoDetailView.as_view(), name="worker-pedido-detail"),
+    path("worker/pedidos/<int:pedido_id>/comprobante/", WorkerPedidoComprobanteDownloadView.as_view(), name="worker-pedido-comprobante"),
     path("worker/pedidos/<int:pedido_id>/cambiar-estado/", WorkerCambiarEstadoView.as_view(), name="worker-cambiar-estado"),
 
     # Worker - productos propios
