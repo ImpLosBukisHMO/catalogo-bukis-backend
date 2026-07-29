@@ -1,3 +1,4 @@
+from django.urls import reverse
 from rest_framework import serializers
 
 from api.models import (
@@ -16,6 +17,7 @@ from api.models import (
     DescuentosModel
 )
 from api import services
+from api.utils.comprobantes import get_comprobante_display_name
 from api.utils.imagenes import get_variante_imagen
 
 
@@ -357,6 +359,9 @@ class ClientePedidoItemSerializer(serializers.ModelSerializer):
 class ClientePedidoSerializer(serializers.ModelSerializer):
     items = ClientePedidoItemSerializer(many=True, read_only=True)
     folio = serializers.ReadOnlyField()
+    comprobante_pago_subido = serializers.SerializerMethodField()
+    comprobante_pago_nombre = serializers.SerializerMethodField()
+    comprobante_pago_url = serializers.SerializerMethodField()
 
     class Meta:
         model = PedidosModel
@@ -371,9 +376,25 @@ class ClientePedidoSerializer(serializers.ModelSerializer):
             "nota_worker",
             "denegado_razon",
             "aprobado_eta",
+            "comprobante_pago_subido",
+            "comprobante_pago_nombre",
+            "comprobante_pago_url",
             "created_at",
             "items",
         ]
+
+    def get_comprobante_pago_subido(self, obj):
+        return bool(obj.comprobante_pago)
+
+    def get_comprobante_pago_nombre(self, obj):
+        if not obj.comprobante_pago:
+            return None
+        return get_comprobante_display_name(obj.comprobante_pago)
+
+    def get_comprobante_pago_url(self, obj):
+        if not obj.comprobante_pago:
+            return None
+        return reverse("mi-pedido-comprobante", kwargs={"id": obj.id})
 
 
 class ClientePedidoListSerializer(serializers.ModelSerializer):
@@ -486,4 +507,3 @@ class CarritoReadSerializer(serializers.ModelSerializer):
         for it in obj.items.select_related("variante__producto").all():
             total += it.variante.precio_efectivo * it.cantidad
         return total
-

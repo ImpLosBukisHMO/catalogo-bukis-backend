@@ -34,6 +34,7 @@ from api.serializer.worker import (
     WorkerVarianteUpdateSerializer,
     WorkerImagenCreateSerializer,
 )
+from api.utils.comprobantes import build_comprobante_response
 
 
 # =========================
@@ -141,6 +142,21 @@ class WorkerPedidoDetailView(APIView):
 
         serializer = WorkerPedidoDetalleSerializer(pedido)
         return Response(serializer.data)
+
+
+class WorkerPedidoComprobanteDownloadView(APIView):
+    permission_classes = [IsAuthenticated, IsWorker]
+
+    def get(self, request, pedido_id):
+        try:
+            pedido = PedidosModel.objects.get(pk=pedido_id)
+        except PedidosModel.DoesNotExist:
+            return Response({"error": "Pedido no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not pedido.comprobante_pago:
+            return Response({"error": "El pedido no tiene comprobante."}, status=status.HTTP_404_NOT_FOUND)
+
+        return build_comprobante_response(pedido.comprobante_pago)
 
 
 # =========================
