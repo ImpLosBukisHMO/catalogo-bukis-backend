@@ -81,6 +81,7 @@ class AdministradorDeUsuarios(BaseUserManager):
             superuser=True,
         )
         usuario.is_admin = True
+        usuario.is_email_verified = True
         usuario.save()
 
         return usuario
