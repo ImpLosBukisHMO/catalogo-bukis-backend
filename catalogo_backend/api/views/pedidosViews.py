@@ -154,22 +154,27 @@ class MiPedidoComprobanteUpdateView(generics.GenericAPIView):
     lookup_field = "id"
 
     @staticmethod
-    def _get_pedido(id):
+    def _get_pedido(*, id, user):
         try:
-            return PedidosModel.objects.prefetch_related("items").get(pk=id)
+            return (
+                PedidosModel.objects
+                .filter(cliente=user)
+                .prefetch_related("items")
+                .get(pk=id)
+            )
         except PedidosModel.DoesNotExist:
             return None
 
     def get(self, request, id, *args, **kwargs):
-        pedido = self._get_pedido(id)
-        if pedido is None:
-            return Response({"error": "Pedido no encontrado."}, status=status.HTTP_404_NOT_FOUND)
-
-        if request.user.is_staff or pedido.cliente_id != request.user.id:
+        if request.user.is_staff:
             return Response(
                 {"error": "No tienes permiso para ver este pedido."},
                 status=status.HTTP_403_FORBIDDEN,
             )
+
+        pedido = self._get_pedido(id=id, user=request.user)
+        if pedido is None:
+            return Response({"error": "Pedido no encontrado."}, status=status.HTTP_404_NOT_FOUND)
 
         if not pedido.comprobante_pago:
             return Response({"error": "El pedido no tiene comprobante."}, status=status.HTTP_404_NOT_FOUND)
@@ -177,15 +182,15 @@ class MiPedidoComprobanteUpdateView(generics.GenericAPIView):
         return build_comprobante_response(pedido.comprobante_pago)
 
     def patch(self, request, id, *args, **kwargs):
-        pedido = self._get_pedido(id)
-        if pedido is None:
-            return Response({"error": "Pedido no encontrado."}, status=status.HTTP_404_NOT_FOUND)
-
-        if request.user.is_staff or pedido.cliente_id != request.user.id:
+        if request.user.is_staff:
             return Response(
                 {"error": "No tienes permiso para modificar este pedido."},
                 status=status.HTTP_403_FORBIDDEN,
             )
+
+        pedido = self._get_pedido(id=id, user=request.user)
+        if pedido is None:
+            return Response({"error": "Pedido no encontrado."}, status=status.HTTP_404_NOT_FOUND)
 
         if pedido.estado != PedidosModel.EstadoPedido.APROBADO:
             return Response(

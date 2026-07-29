@@ -100,7 +100,7 @@ class MiPedidoComprobanteUploadTest(TestCase):
             image_file("comprobante.jpg", image_format="JPEG", content_type="image/jpeg")
         )
 
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_rejects_worker_using_cliente_endpoint(self):
         self.auth(self.worker)
@@ -262,7 +262,40 @@ class MiPedidoComprobanteUploadTest(TestCase):
         self.auth(self.other_cliente)
         response = self.client.get(self.url)
 
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_non_owner_and_unknown_pedido_ids_are_indistinguishable_for_patch(self):
+        self.auth(self.other_cliente)
+
+        non_owner_response = self.client.patch(
+            self.url,
+            {"comprobante_pago": image_file("comprobante.jpg", image_format="JPEG", content_type="image/jpeg")},
+            format="multipart",
+        )
+        unknown_response = self.client.patch(
+            f"/api/mis-pedidos/{self.pedido.id + 9999}/comprobante/",
+            {"comprobante_pago": image_file("comprobante-2.jpg", image_format="JPEG", content_type="image/jpeg")},
+            format="multipart",
+        )
+
+        self.assertEqual(non_owner_response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(unknown_response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(non_owner_response.status_code, unknown_response.status_code)
+        self.assertEqual(non_owner_response.json(), unknown_response.json())
+
+    def test_non_owner_and_unknown_pedido_ids_are_indistinguishable_for_get(self):
+        self.auth(self.owner)
+        upload_response = self.patch_file(pdf_file())
+        self.assertEqual(upload_response.status_code, status.HTTP_200_OK, upload_response.content)
+
+        self.auth(self.other_cliente)
+        non_owner_response = self.client.get(self.url)
+        unknown_response = self.client.get(f"/api/mis-pedidos/{self.pedido.id + 9999}/comprobante/")
+
+        self.assertEqual(non_owner_response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(unknown_response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(non_owner_response.status_code, unknown_response.status_code)
+        self.assertEqual(non_owner_response.json(), unknown_response.json())
 
     def test_worker_can_download_comprobante_from_worker_route(self):
         self.auth(self.owner)
