@@ -9,6 +9,12 @@ from django.contrib.staticfiles import finders
 from email.mime.image import MIMEImage
 from datetime import date
 from html import unescape
+import logging
+
+from api.models import PedidosModel, UsuariosModel
+
+
+logger = logging.getLogger(__name__)
 
 
 def escape_email_text(value, default=""):
@@ -52,3 +58,34 @@ def send_bukis_email(recipient_name, recipient_email, mail_subject, html_body):
         print("Advertencia: No se encontró img/logo.png en los estáticos.")
 
     msg.send(fail_silently=False)
+
+
+def send_comprobante_pago_worker_email(pedido: PedidosModel) -> int:
+    staff_users = UsuariosModel.objects.filter(is_staff=True, is_active=True).exclude(correo="")
+    if not staff_users.exists():
+        return 0
+
+    cliente_nombre = escape_email_text(f"{pedido.cliente.nombre} {pedido.cliente.apellido}", "cliente")
+    html_body = (
+        f'<p style="font-size: 1.3em;">El cliente <b>{cliente_nombre}</b> subió un comprobante '
+        f'para el pedido con folio <b>{pedido.folio}</b>.</p>'
+        f'<p style="font-size: 1.3em;">Ingresa al panel de pedidos del worker para revisarlo de forma segura.</p>'
+    )
+
+    sent = 0
+    for worker in staff_users:
+        try:
+            send_bukis_email(
+                recipient_name=worker.nombre or "equipo Bukis",
+                recipient_email=worker.correo,
+                mail_subject="📎 Nuevo comprobante de pago disponible | Importaciones Los Bukis",
+                html_body=html_body,
+            )
+            sent += 1
+        except Exception:
+            logger.exception(
+                "Failed to send comprobante upload notification",
+                extra={"pedido_id": pedido.id, "worker_id": worker.id},
+            )
+
+    return sent

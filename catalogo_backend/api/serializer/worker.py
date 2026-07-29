@@ -1,5 +1,6 @@
 # Aquí van todos los serializers del worker
 from django.db import transaction
+from django.urls import reverse
 from PIL import Image, UnidentifiedImageError
 from rest_framework import serializers
 from api.models import DescuentosModel
@@ -12,6 +13,7 @@ from api.models import (
     BannerOfertaModel,
 )
 from api.utils.imagenes import get_variante_imagen
+from api.utils.comprobantes import get_comprobante_display_name
 
 
 # =========================
@@ -345,6 +347,9 @@ class WorkerPedidoItemSerializer(serializers.Serializer):
 class WorkerPedidoDetalleSerializer(serializers.ModelSerializer):
     cliente = serializers.SerializerMethodField()
     items = WorkerPedidoItemSerializer(many=True, read_only=True)
+    comprobante_pago_subido = serializers.SerializerMethodField()
+    comprobante_pago_nombre = serializers.SerializerMethodField()
+    comprobante_pago_url = serializers.SerializerMethodField()
 
     class Meta:
         model = PedidosModel
@@ -360,6 +365,9 @@ class WorkerPedidoDetalleSerializer(serializers.ModelSerializer):
             "nota_worker",
             "denegado_razon",
             "aprobado_eta",
+            "comprobante_pago_subido",
+            "comprobante_pago_nombre",
+            "comprobante_pago_url",
             "items",
             "created_at",
         ]
@@ -371,6 +379,19 @@ class WorkerPedidoDetalleSerializer(serializers.ModelSerializer):
             "correo": obj.cliente.correo,
             "telefono": obj.cliente.telefono,
         }
+
+    def get_comprobante_pago_subido(self, obj):
+        return bool(obj.comprobante_pago)
+
+    def get_comprobante_pago_nombre(self, obj):
+        if not obj.comprobante_pago:
+            return None
+        return get_comprobante_display_name(obj.comprobante_pago)
+
+    def get_comprobante_pago_url(self, obj):
+        if not obj.comprobante_pago:
+            return None
+        return reverse("worker-pedido-comprobante", kwargs={"pedido_id": obj.id})
 
 
 # =========================
