@@ -196,71 +196,73 @@ class WorkerCambiarEstadoView(APIView):
         # Enviar correo fuera de la transacción para no bloquear la base de datos
         customer_name = f"{pedido.cliente.nombre} {pedido.cliente.apellido}"
         customer_email = pedido.cliente.correo
-        folio = pedido.folio
+        folio = f"#{pedido.folio}"
         bank_name = self._email_text(settings.BANK_NAME, "")
         bank_account_name = self._email_text(settings.BANK_ACCOUNT_NAME, "")
         bank_account_ref = self._email_text(settings.BANK_ACCOUNT_REF, "")
         
         if pedido.estado == PedidosModel.EstadoPedido.PENDIENTE:
             additional_notes = self._email_text(pedido.nota_worker, "Ninguna.")
-            mail_subject = "📋 Su pedido está siendo revisado | Importaciones Los Bukis"
+            mail_subject = "📋 Su pedido está siendo REVISADO | Importaciones Los Bukis"
             mail_body = (
-                f'<p style="font-size: 1.3em;">Su pedido con el folio <b>{folio}</b> está siendo revisado. Pronto le avisaremos si fue aprobado o denegado.</p>'
-                f'<p style="font-size: 1.3em;"><b>Notas adicionales: </b>{additional_notes}</p>'
+                f'<p>Su pedido con el folio <b>{folio}</b> está siendo revisado. Pronto le avisaremos si fue aprobado o denegado.</p>'
+                f'<p><b>Notas adicionales: </b>{additional_notes}</p>'
             )
         elif pedido.estado == PedidosModel.EstadoPedido.APROBADO:
             additional_notes = self._email_text(pedido.nota_worker, "Ninguna.")
-            mail_subject = "👍 Su pedido ha sido aprobado | Importaciones Los Bukis"
+            mail_subject = "👍 ¡Su pedido ha sido APROBADO! | Importaciones Los Bukis"
             mail_body = (
-                f'<p style="font-size: 1.3em;">Su pedido con el folio <b>{folio}</b> ha sido <span style="color: #b45309;"><b>{pedido.get_estado_display().upper()}.</b></span>'
+                f'<p>Su pedido con el folio <b>{folio}</b> ha sido <span style="color: #b45309; font-weight: bold;">{pedido.get_estado_display().upper()}</span>.'
                 f' Es necesario subir la evidencia del pago de este pedido en la plataforma dentro de las siguientes <b>48 horas</b> para que no sea cancelado.</p>'
-                f'<ul><li><p style="font-size: 1.3em;"><b>Información de pago:</b></p>'
-                f'<ul><li><p style="font-size: 1.3em;"><b>Nombre:</b> {bank_account_name}</p></li>'
-                f'<li><p style="font-size: 1.3em;"><b>Referencia:</b> {bank_account_ref}</p></li>'
-                f'<li><p style="font-size: 1.3em;"><b>Banco:</b> {bank_name}</p></li></ul></li>'
-                f'<li><p style="font-size: 1.3em;"><b>Notas adicionales: </b>{additional_notes}</p></li></ul>'
+                f'<div style="background-color: #f8fafc; padding: 16px; border-radius: 12px; border: 1px solid #e2e8f0; margin: 16px 0;">'
+                f'<p style="margin: 0 0 8px 0; font-weight: bold; color: #0f172a;">Información de pago:</p>'
+                f'<p style="margin: 4px 0;"><b>Nombre:</b> {bank_account_name}</p>'
+                f'<p style="margin: 4px 0;"><b>Referencia:</b> {bank_account_ref}</p>'
+                f'<p style="margin: 4px 0;"><b>Banco:</b> {bank_name}</p>'
+                f'</div>'
+                f'<p><b>Notas adicionales: </b>{additional_notes}</p>'
             )
         elif pedido.estado == PedidosModel.EstadoPedido.DENEGADO:
             rejection_note = self._email_text(pedido.denegado_razon, "Ninguno.")
             additional_notes = self._email_text(pedido.nota_worker, "Ninguna.")
-            mail_subject = "❌ Su pedido ha sido denegado | Importaciones Los Bukis"
+            mail_subject = "❌ Su pedido ha sido DENEGADO | Importaciones Los Bukis"
             mail_body = (
-                f'<p style="font-size: 1.3em;">Su pedido con el folio <b>{folio}</b> ha sido <span style="color: #b91c1c;"><b>{pedido.get_estado_display().upper()}.</b></span></p>'
-                f'<ul><li><p style="font-size: 1.3em;"><b>Motivo del rechazo: </b>{rejection_note}</p></li>'
-                f'<li><p style="font-size: 1.3em;"><b>Notas adicionales: </b>{additional_notes}</p></li></ul>'
+                f'<p>Su pedido con el folio <b>{folio}</b> ha sido <span style="color: #b91c1c; font-weight: bold;">{pedido.get_estado_display().upper()}</span>.</p>'
+                f'<p><b>Motivo del rechazo: </b>{rejection_note}</p>'
+                f'<p><b>Notas adicionales: </b>{additional_notes}</p>'
             )
         elif pedido.estado == PedidosModel.EstadoPedido.LISTO:
             additional_notes = self._email_text(pedido.nota_worker, "Ninguna.")
-            mail_subject = "🔔 Su pedido está listo | Importaciones Los Bukis"
+            mail_subject = "🔔 ¡Su pedido está LISTO! | Importaciones Los Bukis"
             mail_body = (
-                f'<p style="font-size: 1.3em;">Su pedido con el folio <b>{folio}</b> está <span style="color: #b45309;"><b>{pedido.get_estado_display().upper()}.</b></span></p>'
-                f'<ul><li><p style="font-size: 1.3em;"><b>Instrucciones: </b>Esté al pendiente para cuando se le notifique su envío.</p></li>'
-                f'<li><p style="font-size: 1.3em;"><b>Notas adicionales: </b>{additional_notes}</p></li></ul>'
+                f'<p>Su pedido con el folio <b>{folio}</b> está <span style="color: #b45309; font-weight: bold;">{pedido.get_estado_display().upper()}</span>.</p>'
+                f'<p><b>Instrucciones: </b>Esté al pendiente para cuando se le notifique su envío.</p>'
+                f'<p><b>Notas adicionales: </b>{additional_notes}</p>'
             )
         elif pedido.estado == PedidosModel.EstadoPedido.ENVIADO:
             additional_notes = self._email_text(pedido.nota_worker, "Ninguna.")
-            mail_subject = "📦 Su pedido ha sido enviado | Importaciones Los Bukis"
+            mail_subject = "📦 ¡Su pedido ha sido ENVIADO! | Importaciones Los Bukis"
             mail_body = (
-                f'<p style="font-size: 1.3em;">Su pedido con el folio <b>{folio}</b> ha sido <span style="color: #15803d;"><b>{pedido.get_estado_display().upper()}.</b></span></p>'
-                f'<ul><li><p style="font-size: 1.3em;"><b>Indicaciones: </b>Su pedido debería de llegar aproximadamente en 3 días.</p></li>'
-                f'<li><p style="font-size: 1.3em;"><b>Notas adicionales: </b>{additional_notes}</p></li></ul>'
+                f'<p>Su pedido con el folio <b>{folio}</b> ha sido <span style="color: #15803d; font-weight: bold;">{pedido.get_estado_display().upper()}</span>.</p>'
+                f'<p><b>Indicaciones: </b>Su pedido debería de llegar aproximadamente en 3 días.</p>'
+                f'<p><b>Notas adicionales: </b>{additional_notes}</p>'
             )
         elif pedido.estado == PedidosModel.EstadoPedido.COMPLETADO:
             additional_notes = self._email_text(pedido.nota_worker, "Ninguna.")
-            mail_subject = "✅ Su pedido ha sido completado | Importaciones Los Bukis"
+            mail_subject = "✅ ¡Su pedido ha sido COMPLETADO! | Importaciones Los Bukis"
             mail_body = (
-                f'<p style="font-size: 1.3em;">Su pedido con el folio <b>{folio}</b> ha sido <span style="color: #1d4ed8;"><b>{pedido.get_estado_display().upper()}.</b></span></p>'
-                f'<ul><li><p style="font-size: 1.3em;"><b>Indicaciones: </b>Por favor, notifíquenos si el pedido llegó completo y sin daño(s).</p></li>'
-                f'<li><p style="font-size: 1.3em;"><b>Notas adicionales: </b>{additional_notes}</p></li></ul>'
+                f'<p>Su pedido con el folio <b>{folio}</b> ha sido <span style="color: #1d4ed8; font-weight: bold;">{pedido.get_estado_display().upper()}</span>.</p>'
+                f'<p><b>Indicaciones: </b>Por favor, notifíquenos si el pedido llegó completo y sin daño(s).</p>'
+                f'<p><b>Notas adicionales: </b>{additional_notes}</p>'
             )
         elif pedido.estado == PedidosModel.EstadoPedido.CANCELADO:
             rejection_note = self._email_text(pedido.denegado_razon, "Ninguno.")
             additional_notes = self._email_text(pedido.nota_worker, "Ninguna.")
-            mail_subject = "‼️ Su pedido ha sido cancelado | Importaciones Los Bukis"
+            mail_subject = "‼️ Su pedido ha sido CANCELADO | Importaciones Los Bukis"
             mail_body = (
-                f'<p style="font-size: 1.3em;">Su pedido con el folio <b>{folio}</b> ha sido <span style="color: #1d4ed8;"><b>{pedido.get_estado_display().upper()}.</b></span></p>'
-                f'<ul><li><p style="font-size: 1.3em;"><b>Motivo de la cancelación: </b>{rejection_note}</p></li>'
-                f'<li><p style="font-size: 1.3em;"><b>Notas adicionales: </b>{additional_notes}</p></li></ul>'
+                f'<p>Su pedido con el folio <b>{folio}</b> ha sido <span style="color: #b91c1c; font-weight: bold;">{pedido.get_estado_display().upper()}</span>.</p>'
+                f'<p><b>Motivo de la cancelación: </b>{rejection_note}</p>'
+                f'<p><b>Notas adicionales: </b>{additional_notes}</p>'
             )
         
 

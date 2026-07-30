@@ -123,15 +123,26 @@ CORS_ALLOW_CREDENTIALS = True
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Email
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
-EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
-EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+# Email — Mailtrap en desarrollo, SMTP real en producción
+# En desarrollo: los correos son interceptados por Mailtrap (nunca llegan a buzones reales).
+# En producción: usar un ESP real (SendGrid, Resend, etc.) con SPF/DKIM configurados en el dominio.
+if DEBUG:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST     = os.getenv('EMAIL_HOST', 'sandbox.smtp.mailtrap.io')
+    EMAIL_PORT     = int(os.getenv('EMAIL_PORT', 2525))
+    EMAIL_USE_TLS  = True
+    EMAIL_HOST_USER     = os.getenv('EMAIL_HOST_USER', '')
+    EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST     = os.getenv('EMAIL_HOST')          # Ej. smtp.resend.com / smtp.sendgrid.net
+    EMAIL_PORT     = int(os.getenv('EMAIL_PORT', 587))
+    EMAIL_USE_TLS  = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
+    EMAIL_HOST_USER     = os.getenv('EMAIL_HOST_USER')
+    EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
-DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', f'Importaciones Los Bukis <{EMAIL_HOST_USER}>')
 
 # Other private data
 BANK_ACCOUNT_NAME = os.getenv('BANK_ACCOUNT_NAME', '')

@@ -139,7 +139,7 @@ def reenviar_correo_confirmacion(correo: str):
     if not exito:
         return False, f"No se pudo enviar el correo por problemas en el servidor: {msg}"
         
-    return True, "Se ha reenviado el correo de confirmación exitosamente."
+    return True, f"Se ha reenviado el correo de confirmación exitosamente. En caso de que el correo haya llegado a la sección de SPAM, verifique que el remitente sea \"{settings.EMAIL_HOST_USER}\"."
 
 
 #Pedidos (WIP)
