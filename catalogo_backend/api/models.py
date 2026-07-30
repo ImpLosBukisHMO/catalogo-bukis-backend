@@ -31,6 +31,12 @@ def get_banner_oferta_path(instance, filename):
     return os.path.join("img/banner-ofertas/", filename)
 
 
+def get_comprobante_path(instance, filename):
+    ext = filename.split(".")[-1].lower() if "." in filename else "bin"
+    filename = f"{uuid.uuid4()}.{ext}"
+    return os.path.join("comprobantes", "pedidos", str(instance.id or "tmp"), filename)
+
+
 def default_color_metadata():
     return {"colores": []}
 
@@ -522,6 +528,11 @@ class PedidosModel(models.Model):
 
     nota_cliente = models.TextField(null=True, blank=True)
     nota_worker = models.TextField(null=True, blank=True)
+    comprobante_pago = models.FileField(
+        upload_to=get_comprobante_path,
+        null=True,
+        blank=True,
+    )
 
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(default=timezone.now)
