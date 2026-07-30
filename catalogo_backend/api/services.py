@@ -1,8 +1,9 @@
-from datetime import datetime
 import dataclasses
 import datetime
 import jwt
+import random
 from django.conf import settings
+from django.utils import timezone
 # pyrefly: ignore [missing-import]
 from .models import UsuariosModel, PedidosModel
 # pyrefly: ignore [missing-import]
@@ -61,76 +62,67 @@ def obtenerToken(idUsuario):
     return token
 
 
-def generar_token_confirmacion(user_id: int):
-    payload = {
-        "user_id": user_id,
-        "type": "email_confirmation",
-        "exp": datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24),
-        "iat": datetime.datetime.now(datetime.timezone.utc)
-    }
-    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm="HS256")
-
-
-def verificar_token_confirmacion(token: str):
-    try:
-        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=["HS256"])
-
-        if payload.get("type") != "email_confirmation":
-            return None
-
-        return payload.get("user_id")
-    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
-        return None
+def generar_codigo_confirmacion(usuario: UsuariosModel):
+    codigo = str(random.randint(100000, 999999))
+    usuario.verification_code = codigo
+    usuario.verification_code_expires = timezone.now() + datetime.timedelta(minutes=30)
+    usuario.save(update_fields=["verification_code", "verification_code_expires"])
+    return codigo
 
 
 def enviar_correo_confirmacion(usuario: UsuariosModel):
-    token = generar_token_confirmacion(usuario.id)
-    confirmation_url = f"{settings.FRONTEND_URL}/confirmar-cuenta?token={token}"
-    mail_subject = "🔑 Confirma tu cuenta | Importaciones Los Bukis"
+    codigo = generar_codigo_confirmacion(usuario)
+    mail_subject = "🔑 Tu código de verificación | Importaciones Los Bukis"
     html_body = f"""
-    <p style="font-size: 1.1em; line-height: 1.5;">
-        Gracias por registrarte. Para activar tu cuenta y comenzar a realizar pedidos, 
-        por favor confirma tu correo electrónico haciendo clic en el siguiente botón:
-    </p>
-    <div style="text-align: center; margin: 25px 0;">
-        <a href="{confirmation_url}" 
-           style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
-            Confirmar mi cuenta
-        </a>
+    <div style="font-family: sans-serif; text-align: center; color: #333;">
+        <h2 style="color: #d32f2f;">¡Bienvenido a Los Bukis!</h2>
+        <p style="font-size: 1.1em; line-height: 1.5;">
+            Gracias por registrarte. Para activar tu cuenta y comenzar a realizar pedidos, 
+            ingresa el siguiente código de 6 dígitos en la página web:
+        </p>
+        <div style="margin: 30px 0;">
+            <span style="font-size: 2.5em; font-weight: bold; letter-spacing: 5px; color: #111; background-color: #f4f4f4; padding: 15px 25px; border-radius: 10px; border: 1px solid #ddd;">
+                {codigo}
+            </span>
+        </div>
+        <p style="font-size: 0.9em; color: #888;">
+            Este código expirará en 30 minutos. Si no solicitaste este registro, puedes ignorar este correo.
+        </p>
     </div>
-    <p style="font-size: 0.95em; color: #555;">
-        Si el botón no funciona, copia y pega este enlace en tu navegador:<br>
-        <a href="{confirmation_url}" style="color: #007bff;">{confirmation_url}</a>
-    </p>
-    <p style="font-size: 0.9em; color: #888;">
-        Este enlace expirará en 24 horas.
-    </p>
     """
     
-    send_bukis_email(
-        recipient_name=usuario.nombre,
-        recipient_email=usuario.correo,
-        mail_subject=mail_subject,
-        html_body=html_body,
-    )
+    try:
+        send_bukis_email(
+            recipient_name=usuario.nombre,
+            recipient_email=usuario.correo,
+            mail_subject=mail_subject,
+            html_body=html_body,
+        )
+        return True, "Correo enviado"
+    except Exception as e:
+        print(f"Error de SMTP al enviar correo a {usuario.correo}: {e}")
+        return False, str(e)
 
 
-def confirmar_cuenta_token(token: str):
-    user_id = verificar_token_confirmacion(token)
-    
-    if not user_id:
-        return False, "El enlace de confirmación es inválido o ha expirado."
-    
-    usuario = UsuariosModel.objects.filter(id=user_id).first()
+def confirmar_cuenta_codigo(correo: str, codigo: str):
+    usuario = UsuariosModel.objects.filter(correo=correo).first()
     
     if not usuario:
         return False, "El usuario no existe."
     
     if usuario.is_email_verified:
         return True, "La cuenta ya ha sido verificada previamente."
+        
+    if usuario.verification_code != codigo:
+        return False, "El código de verificación es incorrecto."
+        
+    if not usuario.verification_code_expires or timezone.now() > usuario.verification_code_expires:
+        return False, "El código de verificación ha expirado. Por favor solicita uno nuevo."
     
     usuario.is_email_verified = True
-    usuario.save()
+    usuario.verification_code = None
+    usuario.verification_code_expires = None
+    usuario.save(update_fields=["is_email_verified", "verification_code", "verification_code_expires"])
     return True, "Cuenta confirmada exitosamente."
 
 
@@ -143,7 +135,10 @@ def reenviar_correo_confirmacion(correo: str):
     if usuario.is_email_verified:
         return False, "Esta cuenta ya se encuentra verificada."
     
-    enviar_correo_confirmacion(usuario)
+    exito, msg = enviar_correo_confirmacion(usuario)
+    if not exito:
+        return False, f"No se pudo enviar el correo por problemas en el servidor: {msg}"
+        
     return True, "Se ha reenviado el correo de confirmación exitosamente."
 
 

@@ -97,6 +97,8 @@ class UsuariosModel(AbstractUser):
     password = models.CharField(max_length=255, null=False, blank=True, verbose_name="Contraseña")
 
     is_email_verified = models.BooleanField(default=False)
+    verification_code = models.CharField(max_length=6, null=True, blank=True)
+    verification_code_expires = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     is_admin = models.BooleanField(default=False)
     is_superuser = models.BooleanField(default=False)

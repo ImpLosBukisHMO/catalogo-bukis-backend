@@ -14,8 +14,11 @@ class APIRegistro(views.APIView):
         nuevoUsuario = services.crear_usuario(dcUsuario=datos)
         instancia_usuario = services.filtrarUsuarioPorCorreo(nuevoUsuario.correo)
         
+        mensaje = 'Usuario registrado con éxito. Revisa tu correo para confirmar la cuenta.'
         if instancia_usuario:
-            services.enviar_correo_confirmacion(instancia_usuario)
+            exito, msg_correo = services.enviar_correo_confirmacion(instancia_usuario)
+            if not exito:
+                mensaje = 'Usuario registrado con éxito, pero tuvimos un problema enviando el correo. Intenta reenviarlo más tarde.'
         
         res = dataclasses.asdict(nuevoUsuario)
         res.pop('password', None)
@@ -23,7 +26,7 @@ class APIRegistro(views.APIView):
         return response.Response(
             {
                 'datos': res,
-                'mensaje': 'Usuario registrado con éxito. Revisa tu correo para confirmar la cuenta.'
+                'mensaje': mensaje
             },
             status=status.HTTP_201_CREATED
         )
@@ -55,11 +58,13 @@ class APIIniciarSesion(views.APIView):
 # Confirmar cuenta
 class APIConfirmarCuenta(views.APIView):
     def post(self, request):
-        token = request.data.get('token')
-        if not token:
-            return response.Response({'error': 'El token es requerido.'}, status=status.HTTP_400_BAD_REQUEST)
+        correo = request.data.get('correo')
+        codigo = request.data.get('codigo')
         
-        exito, mensaje = services.confirmar_cuenta_por_token(token)
+        if not correo or not codigo:
+            return response.Response({'error': 'El correo y el código son requeridos.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        exito, mensaje = services.confirmar_cuenta_codigo(correo, codigo)
         if not exito:
             return response.Response({'error': mensaje}, status=status.HTTP_400_BAD_REQUEST)
         
