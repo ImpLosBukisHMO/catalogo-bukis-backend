@@ -1,8 +1,9 @@
 import dataclasses
 from rest_framework import views, response, exceptions, permissions, status
+# pyrefly: ignore [missing-import]
 from . import serializers
+# pyrefly: ignore [missing-import]
 from . import services
-from . import authentication
 from rest_framework_simplejwt.tokens import RefreshToken
 
 # Registrarse.
