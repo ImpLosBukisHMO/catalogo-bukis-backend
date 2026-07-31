@@ -43,6 +43,9 @@ def default_color_metadata():
 
 # Administrador de cuentas.
 class AdministradorDeUsuarios(BaseUserManager):
+    def get_by_natural_key(self, correo):
+        return self.get(correo__iexact=correo)
+
     def create_user(
         self,
         nombre,
@@ -533,6 +536,12 @@ class PedidosModel(models.Model):
         null=True,
         blank=True,
     )
+    # Plazo límite para subir el comprobante (se asigna al aprobar el pedido).
+    # Cuando el pedido ya no está APROBADO, este campo se limpia.
+    comprobante_deadline = models.DateTimeField(null=True, blank=True)
+    # Se marca True cuando un pedido con comprobante subido es cancelado,
+    # indicando que el cliente necesita un reembolso.
+    requiere_reembolso = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(default=timezone.now)

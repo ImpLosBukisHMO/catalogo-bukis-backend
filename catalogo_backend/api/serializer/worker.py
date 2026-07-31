@@ -307,6 +307,7 @@ class WorkerVariantSerializer(serializers.ModelSerializer):
 class WorkerPedidoSerializer(serializers.ModelSerializer):
     cliente = serializers.SerializerMethodField()
     items_count = serializers.IntegerField(source="items.count", read_only=True)
+    comprobante_pago_subido = serializers.SerializerMethodField()
 
     class Meta:
         model = PedidosModel
@@ -318,6 +319,9 @@ class WorkerPedidoSerializer(serializers.ModelSerializer):
             "estado",
             "precio_total",
             "items_count",
+            "comprobante_deadline",
+            "comprobante_pago_subido",
+            "requiere_reembolso",
             "created_at",
         ]
 
@@ -327,6 +331,9 @@ class WorkerPedidoSerializer(serializers.ModelSerializer):
             "nombre": f"{obj.cliente.nombre} {obj.cliente.apellido}",
             "correo": obj.cliente.correo,
         }
+
+    def get_comprobante_pago_subido(self, obj):
+        return bool(obj.comprobante_pago)
 
 
 # =========================
@@ -365,9 +372,11 @@ class WorkerPedidoDetalleSerializer(serializers.ModelSerializer):
             "nota_worker",
             "denegado_razon",
             "aprobado_eta",
+            "comprobante_deadline",
             "comprobante_pago_subido",
             "comprobante_pago_nombre",
             "comprobante_pago_url",
+            "requiere_reembolso",
             "items",
             "created_at",
         ]

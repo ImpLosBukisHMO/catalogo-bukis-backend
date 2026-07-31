@@ -1,6 +1,9 @@
 import threading
+from datetime import timedelta
 # pyrefly: ignore [missing-import]
 from django.conf import settings
+# pyrefly: ignore [missing-import]
+from django.utils import timezone
 # pyrefly: ignore [missing-import]
 from api.utils.emails import escape_email_text, send_bukis_email
 # pyrefly: ignore [missing-import]
@@ -182,6 +185,7 @@ class WorkerCambiarEstadoView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+        estado_anterior = pedido.estado
         pedido.estado = serializer.validated_data["estado"]
         mail_subject = ""
 
@@ -191,7 +195,36 @@ class WorkerCambiarEstadoView(APIView):
         if serializer.validated_data.get("denegado_razon"):
             pedido.denegado_razon = serializer.validated_data["denegado_razon"]
 
-        pedido.save(update_fields=["estado", "nota_worker", "denegado_razon", "updated_at"])
+        # Asignar/limpiar deadline de comprobante según el estado
+        HORAS_DEADLINE = getattr(settings, "COMPROBANTE_DEADLINE_HORAS", 48)
+        if pedido.estado == PedidosModel.EstadoPedido.APROBADO:
+            pedido.comprobante_deadline = timezone.now() + timedelta(hours=HORAS_DEADLINE)
+        else:
+            pedido.comprobante_deadline = None
+
+        # Marcar requiere_reembolso si se cancela un pedido que ya tiene
+        # comprobante subido (el cliente ya pagó).
+        if pedido.estado == PedidosModel.EstadoPedido.CANCELADO and pedido.comprobante_pago:
+            pedido.requiere_reembolso = True
+
+        # Limpiar campos obsoletos al reabrir un pedido (CANCELED → PENDING)
+        if (
+            estado_anterior == PedidosModel.EstadoPedido.CANCELADO
+            and pedido.estado == PedidosModel.EstadoPedido.PENDIENTE
+        ):
+            pedido.denegado_razon = None
+            pedido.nota_worker = serializer.validated_data.get("nota_worker") or None
+            pedido.requiere_reembolso = False
+            # Limpiar comprobante del ciclo anterior
+            if pedido.comprobante_pago:
+                pedido.comprobante_pago.delete(save=False)
+                pedido.comprobante_pago = None
+
+        pedido.save(update_fields=[
+            "estado", "nota_worker", "denegado_razon",
+            "comprobante_deadline", "requiere_reembolso",
+            "comprobante_pago", "updated_at",
+        ])
 
         # Enviar correo fuera de la transacción para no bloquear la base de datos
         customer_name = f"{pedido.cliente.nombre} {pedido.cliente.apellido}"
@@ -258,10 +291,22 @@ class WorkerCambiarEstadoView(APIView):
         elif pedido.estado == PedidosModel.EstadoPedido.CANCELADO:
             rejection_note = self._email_text(pedido.denegado_razon, "Ninguno.")
             additional_notes = self._email_text(pedido.nota_worker, "Ninguna.")
+            reembolso_aviso = ""
+            if pedido.requiere_reembolso:
+                reembolso_aviso = (
+                    '<div style="background-color: #fef2f2; padding: 16px; border-radius: 12px; '
+                    'border: 1px solid #fecaca; margin: 16px 0;">'
+                    '<p style="margin: 0; font-weight: bold; color: #991b1b;">💰 Reembolso pendiente</p>'
+                    '<p style="margin: 8px 0 0; color: #991b1b;">Hemos registrado que usted ya realizó '
+                    'el pago de este pedido. Nos pondremos en contacto con usted para coordinar '
+                    'el reembolso correspondiente.</p>'
+                    '</div>'
+                )
             mail_subject = "‼️ Su pedido ha sido CANCELADO | Importaciones Los Bukis"
             mail_body = (
                 f'<p>Su pedido con el folio <b>{folio}</b> ha sido <span style="color: #b91c1c; font-weight: bold;">{pedido.get_estado_display().upper()}</span>.</p>'
                 f'<p><b>Motivo de la cancelación: </b>{rejection_note}</p>'
+                f'{reembolso_aviso}'
                 f'<p><b>Notas adicionales: </b>{additional_notes}</p>'
             )
         

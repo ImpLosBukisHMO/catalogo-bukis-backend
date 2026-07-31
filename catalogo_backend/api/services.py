@@ -47,7 +47,7 @@ def crear_usuario(dcUsuario: "DataClassUsuarios"):
 
 
 def filtrarUsuarioPorCorreo(correo):
-    usuario = UsuariosModel.objects.filter(correo=correo).first()
+    usuario = UsuariosModel.objects.filter(correo__iexact=correo).first()
     return usuario
 
 
