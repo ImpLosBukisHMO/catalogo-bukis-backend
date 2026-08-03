@@ -30,7 +30,7 @@ from api.models import BannerOfertaModel, UsuariosModel
 # =========================
 
 def _create_user(email: str, staff: bool = False) -> UsuariosModel:
-    return UsuariosModel.objects.create_user(
+    user = UsuariosModel.objects.create_user(
         nombre="Test",
         apellido="Banner",
         correo=email,
@@ -38,6 +38,10 @@ def _create_user(email: str, staff: bool = False) -> UsuariosModel:
         password="testpass123",
         staff=staff,
     )
+    if staff:
+        user.worker_role = UsuariosModel.WorkerRole.TOTAL
+        user.save(update_fields=["worker_role"])
+    return user
 
 
 def _image_bytes(format: str = "JPEG", size=(16, 16)) -> bytes:

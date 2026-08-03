@@ -10,7 +10,7 @@ from api.models import ColorModel, ProductoVariantesModel, ProductosModel, Usuar
 
 
 def _create_worker(email: str = "worker-barcode@test.com") -> UsuariosModel:
-    return UsuariosModel.objects.create_user(
+    worker = UsuariosModel.objects.create_user(
         nombre="Worker",
         apellido="Barcode",
         correo=email,
@@ -18,6 +18,9 @@ def _create_worker(email: str = "worker-barcode@test.com") -> UsuariosModel:
         password="testpass123",
         staff=True,
     )
+    worker.worker_role = UsuariosModel.WorkerRole.TOTAL
+    worker.save(update_fields=["worker_role"])
+    return worker
 
 
 def _create_product(worker: UsuariosModel, nombre: str = "Producto Barcode") -> ProductosModel:
@@ -130,7 +133,7 @@ class BarcodeMigrationGraphTest(TestCase):
         loader = MigrationLoader(connection, ignore_no_migrations=True)
         api_leaves = [node for node in loader.graph.leaf_nodes() if node[0] == "api"]
 
-        self.assertEqual(api_leaves, [("api", "0031_pedidosmodel_comprobante_pago")])
+        self.assertEqual(api_leaves, [("api", "0032_worker_role_and_permissions")])
 
     def test_only_one_0022_api_migration_file_exists(self):
         migrations_dir = Path(__file__).resolve().parents[1] / "migrations"
