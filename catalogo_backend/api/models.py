@@ -106,6 +106,28 @@ class UsuariosModel(AbstractUser):
     is_superuser = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
 
+    # Worker role system (Slice A1)
+    class WorkerRole(models.TextChoices):
+        NONE = "none", "None"
+        TOTAL = "total", "Total"
+        PARCIAL = "parcial", "Parcial"
+
+    worker_role = models.CharField(
+        max_length=10,
+        choices=WorkerRole.choices,
+        default=WorkerRole.NONE,
+        null=False,
+        blank=False,
+    )
+
+    # Granular capability flags — all default False (NOT NULL)
+    can_add_products          = models.BooleanField(default=False, null=False)
+    can_edit_products         = models.BooleanField(default=False, null=False)
+    can_edit_prices           = models.BooleanField(default=False, null=False)
+    can_manage_discount_codes = models.BooleanField(default=False, null=False)
+    can_apply_discounts       = models.BooleanField(default=False, null=False)
+    can_manage_offers         = models.BooleanField(default=False, null=False)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
