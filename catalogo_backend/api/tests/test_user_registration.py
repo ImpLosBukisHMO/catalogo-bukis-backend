@@ -175,6 +175,31 @@ class LoginSinVerificarTests(TestCase):
         )
         self.assertEqual(res.status_code, 401)
 
+    def test_login_ignora_mayusculas_minusculas_en_correo(self):
+        """Un login debe ser exitoso incluso si el correo enviado tiene diferente case."""
+        _create_verified_user(correo="Mayuscula@test.com")
+        res = self.client.post(
+            LOGIN_URL,
+            {"correo": "mayuscula@test.com", "password": "TestPassword1!"},
+            format="json",
+        )
+        self.assertLess(res.status_code, 400, res.data)
+
+    def test_registro_acepta_caracteres_especiales_comunes_en_password(self):
+        """El registro debe aceptar contraseñas con _, - y ."""
+        res = self.client.post(
+            SIGNUP_URL,
+            {
+                "nombre": "Test",
+                "apellido": "User",
+                "correo": "special_chars@test.com",
+                "telefono": "1234567890",
+                "password": "Password_.-123", # Tiene mayúscula, minúscula, número, y los 3 caracteres nuevos permitidos
+            },
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201)
+
 
 # =============================================================================
 # 3. Confirmación de cuenta (OTP)
