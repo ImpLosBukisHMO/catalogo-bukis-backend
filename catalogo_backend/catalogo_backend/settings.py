@@ -98,19 +98,29 @@ MEDIA_ROOT = Path(os.environ.get('MEDIA_ROOT', BASE_DIR / "media"))
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        # Mantén JWT como default porque tu worker panel y /auth/login/ dependen de esto
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        # Uso de cookies HttpOnly con fallback a Bearer para compatibilidad
+        "api.authentication.JWTCookieAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.AllowAny",
     ),
     "DEFAULT_THROTTLE_RATES": {
-        "anon": "5/minute",  # Login rate limiter
+        # Defensa en profundidad contra fuerza bruta en el login:
+        # login_ip: bloquea por IP (misma red, distintos usuarios).
+        # login_account: bloquea por cuenta (distintas IPs, mismo usuario objetivo).
+        "login_ip": "5/minute",
+        "login_account": "10/minute",
     }
 }
 
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 AUTH_USER_MODEL = "api.UsuariosModel"
+
+# Número de proxies delante del servidor de Django (ej. Railway, Nginx).
+# Permite que DRF lea la IP real del cliente desde X-Forwarded-For
+# en lugar de la IP del proxy, lo que evita bloquear a todos los usuarios
+# con el mismo throttle de IP.
+NUM_PROXIES = int(os.environ.get('NUM_PROXIES', 1))
 
 CORS_ALLOW_ALL_ORIGINS = DEBUG  # Only allow all in development
 CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',') if not DEBUG else []

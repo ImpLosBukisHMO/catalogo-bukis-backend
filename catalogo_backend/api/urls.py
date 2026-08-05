@@ -1,8 +1,6 @@
 # pyrefly: ignore [missing-import]
-from api.apis import CustomTokenObtainPairView
+from api.apis import CustomTokenObtainPairView, CookieTokenRefreshView
 from django.urls import path
-# pyrefly: ignore [missing-import]
-from rest_framework_simplejwt.views import TokenRefreshView
 from api.views.descuentosViews import DescuentosRetrieveUpdateDestroy
 from api.views.descuentosViews import DescuentosListCreate
 from api.views import (
@@ -104,7 +102,7 @@ urlpatterns = [
 
     # JWT
     path("auth/login/", CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
-    path("auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("auth/refresh/", CookieTokenRefreshView.as_view(), name="token_refresh"),
 
     # Worker - variantes (existente)
     path("worker/variants/", WorkerVariantListView.as_view(), name="worker-variants"),
