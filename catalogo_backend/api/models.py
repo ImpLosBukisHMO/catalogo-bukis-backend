@@ -212,6 +212,7 @@ class ProductosModel(models.Model):
         blank=True,
         related_name="productos_descuentos"
     )
+    vistas = models.PositiveIntegerField(default=0, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

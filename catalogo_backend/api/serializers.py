@@ -114,6 +114,7 @@ class ProductosSerializer(serializers.ModelSerializer):
             "categoria",
             "descuento_especial",
             "disponible",
+            "vistas",
             "created_at",
             "updated_at",
         ]
