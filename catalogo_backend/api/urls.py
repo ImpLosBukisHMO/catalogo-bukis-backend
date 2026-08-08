@@ -28,7 +28,14 @@ from api.views.workerViews import (
     WorkerDescuentosTiposView,
 )
 from api.views.usuariosViews import MiUsuarioView
-from api.views.productosViews import ProductosListCreate, ProductosRetrieveUpdateDestroy
+from api.views.productosViews import (
+    ProductosListCreate, 
+    ProductosRetrieveUpdateDestroy,
+    ProductosNovedadesList,
+    ProductosMasVistosList,
+    ProductosMasVendidosList,
+    ReportarVistaProducto
+)
 from api.views.productoVariantesViews import ProductoVariantesListCreateView, ProductoVariantesDetailView
 from api.views.productosImagenesViews import ProductosImagenesListCreateView, ProductosImagenesDetailView
 from api.views.bannerOfertasViews import (
@@ -78,6 +85,12 @@ urlpatterns = [
     # Producto - Variantes
     path("producto-variantes/", ProductoVariantesListCreateView.as_view(), name="producto-variantes-list-create"),
     path("producto-variantes/<int:id>/", ProductoVariantesDetailView.as_view(), name="producto-variantes-detail"),
+
+    # Productos (Tridente)
+    path("productos/novedades/", ProductosNovedadesList.as_view(), name="productos-novedades"),
+    path("productos/mas-vistos/", ProductosMasVistosList.as_view(), name="productos-mas-vistos"),
+    path("productos/mas-vendidos/", ProductosMasVendidosList.as_view(), name="productos-mas-vendidos"),
+    path("productos/<int:id>/ver/", ReportarVistaProducto.as_view(), name="productos-reportar-vista"),
 
     # Productos
     path("productos/", ProductosListCreate.as_view(), name="productos-list-create"),
