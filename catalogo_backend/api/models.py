@@ -43,6 +43,9 @@ def default_color_metadata():
 
 # Administrador de cuentas.
 class AdministradorDeUsuarios(BaseUserManager):
+    def get_by_natural_key(self, correo):
+        return self.get(correo__iexact=correo)
+
     def create_user(
         self,
         nombre,
@@ -87,6 +90,7 @@ class AdministradorDeUsuarios(BaseUserManager):
             superuser=True,
         )
         usuario.is_admin = True
+        usuario.is_email_verified = True
         usuario.save()
 
         return usuario
@@ -101,6 +105,9 @@ class UsuariosModel(AbstractUser):
     telefono = models.CharField(max_length=30, null=False, verbose_name="Teléfono")
     password = models.CharField(max_length=255, null=False, blank=True, verbose_name="Contraseña")
 
+    is_email_verified = models.BooleanField(default=False)
+    verification_code = models.CharField(max_length=6, null=True, blank=True)
+    verification_code_expires = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     is_admin = models.BooleanField(default=False)
     is_superuser = models.BooleanField(default=False)
@@ -205,6 +212,7 @@ class ProductosModel(models.Model):
         blank=True,
         related_name="productos_descuentos"
     )
+    vistas = models.PositiveIntegerField(default=0, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -529,6 +537,12 @@ class PedidosModel(models.Model):
         null=True,
         blank=True,
     )
+    # Plazo límite para subir el comprobante (se asigna al aprobar el pedido).
+    # Cuando el pedido ya no está APROBADO, este campo se limpia.
+    comprobante_deadline = models.DateTimeField(null=True, blank=True)
+    # Se marca True cuando un pedido con comprobante subido es cancelado,
+    # indicando que el cliente necesita un reembolso.
+    requiere_reembolso = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(default=timezone.now)

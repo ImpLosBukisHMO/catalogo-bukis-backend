@@ -114,6 +114,7 @@ class ProductosSerializer(serializers.ModelSerializer):
             "categoria",
             "descuento_especial",
             "disponible",
+            "vistas",
             "created_at",
             "updated_at",
         ]
@@ -376,6 +377,7 @@ class ClientePedidoSerializer(serializers.ModelSerializer):
             "nota_worker",
             "denegado_razon",
             "aprobado_eta",
+            "comprobante_deadline",
             "comprobante_pago_subido",
             "comprobante_pago_nombre",
             "comprobante_pago_url",
@@ -400,6 +402,7 @@ class ClientePedidoSerializer(serializers.ModelSerializer):
 class ClientePedidoListSerializer(serializers.ModelSerializer):
     items_count = serializers.SerializerMethodField()
     folio = serializers.ReadOnlyField()
+    comprobante_pago_subido = serializers.SerializerMethodField()
 
     class Meta:
         model = PedidosModel
@@ -410,11 +413,16 @@ class ClientePedidoListSerializer(serializers.ModelSerializer):
             "estado",
             "precio_total",
             "created_at",
+            "comprobante_deadline",
             "items_count",
+            "comprobante_pago_subido",
         ]
 
     def get_items_count(self, obj):
         return obj.items.count()
+
+    def get_comprobante_pago_subido(self, obj):
+        return bool(obj.comprobante_pago)
 
 
 # =========================

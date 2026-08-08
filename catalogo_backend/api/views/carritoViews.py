@@ -265,9 +265,13 @@ def carrito_checkout(request):
     # Enviar correo fuera de la transacción para no bloquear la base de datos
     customer_name = f"{pedido.cliente.nombre} {pedido.cliente.apellido}"
     customer_email = pedido.cliente.correo
-    order_public_id = pedido.public_id
-    mail_subject = "¡Su pedido ha sido recibido! | Importaciones Los Bukis"
-    mail_body = f'<p style="font-size: 1.3em;">Su pedido con el folio <b>{order_public_id}</b> se encuentra en revisión. Pronto se le notificará si fue aprobado o denegado.</p><br>'
+    folio = f"#{pedido.folio}"
+    total_formatted = f"$ {pedido.precio_total:,.2f} MXN"
+    mail_subject = "📋 ¡Su pedido ha sido RECIBIDO! | Importaciones Los Bukis"
+    mail_body = (
+        f'<p>Hemos recibido su pedido con el folio <b>{folio}</b> por un total de <b>{total_formatted}</b>.</p>'
+        f'<p>Actualmente se encuentra en proceso de revisión por nuestro equipo. Le notificaremos por este medio en cuanto sea revisado.</p>'
+    )
 
     try:
         transaction.on_commit(

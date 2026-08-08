@@ -12,12 +12,9 @@ import dj_database_url
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dev-only-change-in-production')
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
-
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
-
 CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',') if os.environ.get('CSRF_TRUSTED_ORIGINS') else []
 
 INSTALLED_APPS = [
@@ -83,18 +80,16 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+    {"NAME": "api.validators.ComplexPasswordValidator"},
 ]
 
 LANGUAGE_CODE = "es-mx"
 TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
-
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_DIRS = [
-    BASE_DIR / "static",
-]
+STATICFILES_DIRS = [BASE_DIR / "static"]
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Media — en prod apunta al mount path del Railway Volume (MEDIA_ROOT env var)
@@ -103,34 +98,56 @@ MEDIA_ROOT = Path(os.environ.get('MEDIA_ROOT', BASE_DIR / "media"))
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        # Mantén JWT como default porque tu worker panel y /auth/login/ dependen de esto
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        # Uso de cookies HttpOnly con fallback a Bearer para compatibilidad
+        "api.authentication.JWTCookieAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.AllowAny",
     ),
+    "DEFAULT_THROTTLE_RATES": {
+        # Defensa en profundidad contra fuerza bruta en el login:
+        # login_ip: bloquea por IP (misma red, distintos usuarios).
+        # login_account: bloquea por cuenta (distintas IPs, mismo usuario objetivo).
+        "login_ip": "5/minute",
+        "login_account": "10/minute",
+    }
 }
 
-# Si lo usan en otro lado, ok; si no, puede quedarse sin afectar
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
-
 AUTH_USER_MODEL = "api.UsuariosModel"
 
-# CORS
+# Número de proxies delante del servidor de Django (ej. Railway, Nginx).
+# Permite que DRF lea la IP real del cliente desde X-Forwarded-For
+# en lugar de la IP del proxy, lo que evita bloquear a todos los usuarios
+# con el mismo throttle de IP.
+NUM_PROXIES = int(os.environ.get('NUM_PROXIES', 1))
+
 CORS_ALLOW_ALL_ORIGINS = DEBUG  # Only allow all in development
 CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',') if not DEBUG else []
 CORS_ALLOW_CREDENTIALS = True
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Email
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
-EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
-EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
-DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+# Email — Mailtrap en desarrollo, SMTP real en producción
+# En desarrollo: los correos son interceptados por Mailtrap (nunca llegan a buzones reales).
+# En producción: usar un ESP real (SendGrid, Resend, etc.) con SPF/DKIM configurados en el dominio.
+if DEBUG:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST     = os.getenv('EMAIL_HOST', 'sandbox.smtp.mailtrap.io')
+    EMAIL_PORT     = int(os.getenv('EMAIL_PORT', 2525))
+    EMAIL_USE_TLS  = True
+    EMAIL_HOST_USER     = os.getenv('EMAIL_HOST_USER', '')
+    EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST     = os.getenv('EMAIL_HOST')          # Ej. smtp.resend.com / smtp.sendgrid.net
+    EMAIL_PORT     = int(os.getenv('EMAIL_PORT', 587))
+    EMAIL_USE_TLS  = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
+    EMAIL_HOST_USER     = os.getenv('EMAIL_HOST_USER')
+    EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', f'Importaciones Los Bukis <{EMAIL_HOST_USER}>')
 
 # Other private data
 BANK_ACCOUNT_NAME = os.getenv('BANK_ACCOUNT_NAME', '')
