@@ -590,3 +590,116 @@ class WorkerEndpointPermissionsTest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         pedido.refresh_from_db()
         self.assertEqual(pedido.estado, PedidosModel.EstadoPedido.APROBADO)
+
+    def test_legacy_discount_endpoints_public_read_but_protected_mutations(self):
+        """Legacy /api/descuentos/ must keep GET public (used by public catalog UI)
+        while POST/PUT/PATCH/DELETE require `IsAuthenticated + CanManageDiscountCodes`.
+
+        This closes a pre-existing bypass where the legacy endpoints inherited
+        DRF's `AllowAny` default and allowed unauthenticated discount mutations,
+        even after `/api/worker/descuentos/` was gated. See PR #68 review.
+        """
+        existing = _create_discount("Legacy existing discount")
+        list_url = reverse("descuentos-list-create")
+        detail_url = reverse("descuentos-detail", args=[existing.id])
+
+        create_payload = {
+            "nombre": "Legacy created discount",
+            "tipo": DescuentosModel.DescuentoType.GENERAL,
+            "porcentaje": "15.00",
+            "activo": True,
+            "fecha_inicio": (timezone.now() - timedelta(days=1)).isoformat(),
+            "fecha_fin": (timezone.now() + timedelta(days=1)).isoformat(),
+        }
+
+        # Anonymous reads stay public (public catalog UI depends on this).
+        self.client.force_authenticate(user=None)
+        self.assertEqual(self.client.get(list_url).status_code, status.HTTP_200_OK)
+        self.assertEqual(self.client.get(detail_url).status_code, status.HTTP_200_OK)
+
+        # Anonymous mutations must be rejected AND must not mutate.
+        pre_count = DescuentosModel.objects.count()
+        response = self.client.post(list_url, create_payload, format="json")
+        self.assertIn(response.status_code, (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN))
+        self.assertEqual(DescuentosModel.objects.count(), pre_count)
+
+        response = self.client.patch(detail_url, {"nombre": "Blocked anon patch"}, format="json")
+        self.assertIn(response.status_code, (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN))
+        existing.refresh_from_db()
+        self.assertEqual(existing.nombre, "Legacy existing discount")
+
+        response = self.client.delete(detail_url)
+        self.assertIn(response.status_code, (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN))
+        self.assertTrue(DescuentosModel.objects.filter(id=existing.id).exists())
+
+        # Partial worker without the flag is rejected AND must not mutate.
+        denied_worker = _create_worker(
+            "legacy-discount-denied@test.com",
+            UsuariosModel.WorkerRole.PARCIAL,
+            can_manage_discount_codes=False,
+        )
+        self.client.force_authenticate(user=denied_worker)
+
+        response = self.client.post(list_url, create_payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(DescuentosModel.objects.count(), pre_count)
+
+        response = self.client.put(
+            detail_url,
+            {
+                **create_payload,
+                "nombre": "Blocked partial put",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        existing.refresh_from_db()
+        self.assertEqual(existing.nombre, "Legacy existing discount")
+
+        response = self.client.patch(detail_url, {"nombre": "Blocked partial patch"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        existing.refresh_from_db()
+        self.assertEqual(existing.nombre, "Legacy existing discount")
+
+        response = self.client.delete(detail_url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(DescuentosModel.objects.filter(id=existing.id).exists())
+
+        # Partial worker with the flag can mutate.
+        allowed_worker = _create_worker(
+            "legacy-discount-allowed@test.com",
+            UsuariosModel.WorkerRole.PARCIAL,
+            can_manage_discount_codes=True,
+        )
+        self.client.force_authenticate(user=allowed_worker)
+
+        response = self.client.post(list_url, create_payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        created_id = response.data["datos"]["id"]
+        created_detail_url = reverse("descuentos-detail", args=[created_id])
+
+        response = self.client.patch(created_detail_url, {"nombre": "Updated legacy discount"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(
+            DescuentosModel.objects.get(id=created_id).nombre,
+            "Updated legacy discount",
+        )
+
+        response = self.client.put(
+            created_detail_url,
+            {
+                **create_payload,
+                "nombre": "Put updated legacy discount",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(
+            DescuentosModel.objects.get(id=created_id).nombre,
+            "Put updated legacy discount",
+        )
+
+        response = self.client.delete(created_detail_url)
+        # RetrieveUpdateDestroy delete override returns 200 with a message, keep parity.
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(DescuentosModel.objects.filter(id=created_id).exists())

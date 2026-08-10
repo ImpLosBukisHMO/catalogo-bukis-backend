@@ -1,7 +1,9 @@
 from django.http import Http404
 from rest_framework import generics, status
+from rest_framework.permissions import AllowAny, IsAuthenticated, SAFE_METHODS
 from rest_framework.response import Response
 from api.models import DescuentosModel
+from api.permissions import CanManageDiscountCodes
 from ..serializers import DescuentosSerializer
 
 """
@@ -12,6 +14,11 @@ Views de los descuentos
 class DescuentosListCreate(generics.ListCreateAPIView):
     queryset = DescuentosModel.objects.all()
     serializer_class = DescuentosSerializer
+
+    def get_permissions(self):
+        if self.request.method in SAFE_METHODS:
+            return [AllowAny()]
+        return [IsAuthenticated(), CanManageDiscountCodes()]
 
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -31,6 +38,11 @@ class DescuentosRetrieveUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = DescuentosSerializer
     lookup_field = 'id'
     http_method_names = ['get', 'put', 'patch', 'delete', 'head', 'options']
+
+    def get_permissions(self):
+        if self.request.method in SAFE_METHODS:
+            return [AllowAny()]
+        return [IsAuthenticated(), CanManageDiscountCodes()]
 
     # Obtener info del descuento por ID.
     def get(self, request, *args, **kwargs):
