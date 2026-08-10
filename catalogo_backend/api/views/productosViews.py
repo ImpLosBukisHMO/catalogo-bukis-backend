@@ -173,7 +173,7 @@ class ProductosMenosVendidosList(generics.ListAPIView):
             estado=ProductosModel.EstadoProducto.ACTIVE,
         ).annotate(
             total_vendidos=Sum('producto_colores__pedido_items__cantidad', filter=~Q(producto_colores__pedido_items__pedido__estado=PedidosModel.EstadoPedido.CANCELADO))
-        ).order_by("-total_vendidos")[:10]
+        ).order_by("total_vendidos")[:10]
 
 
 class ReportarVistaProducto(APIView):
