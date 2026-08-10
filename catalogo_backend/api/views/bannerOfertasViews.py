@@ -5,7 +5,7 @@ from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
-from api.permissions import IsWorker
+from api.permissions import CanManageOffers, IsWorker
 from api.models import BannerOfertaModel
 from api.serializer.worker import WorkerBannerOfertaSerializer
 from api.serializer.client import BannerOfertaPublicSerializer
@@ -15,18 +15,28 @@ from api.serializer.client import BannerOfertaPublicSerializer
 # WORKER - BANNER DE OFERTAS
 # =========================
 class WorkerBannerOfertasListCreate(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated, IsWorker]
+    permission_classes = [IsAuthenticated, CanManageOffers]
     queryset = BannerOfertaModel.objects.all()
     serializer_class = WorkerBannerOfertaSerializer
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsAuthenticated(), CanManageOffers()]
+        return [IsAuthenticated(), IsWorker()]
+
 
 class WorkerBannerOfertasRetrieveUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [IsAuthenticated, IsWorker]
+    permission_classes = [IsAuthenticated, CanManageOffers]
     queryset = BannerOfertaModel.objects.all()
     serializer_class = WorkerBannerOfertaSerializer
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     lookup_field = "id"
+
+    def get_permissions(self):
+        if self.request.method in {"PATCH", "PUT", "DELETE"}:
+            return [IsAuthenticated(), CanManageOffers()]
+        return [IsAuthenticated(), IsWorker()]
 
 
 # =========================
