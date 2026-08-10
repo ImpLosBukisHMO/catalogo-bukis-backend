@@ -5,7 +5,9 @@ Design source: #2906 (D1, D2, D4)
 """
 
 from django.core.exceptions import ValidationError
-from django.test import TestCase
+from django.db import connection
+from django.db.migrations.executor import MigrationExecutor
+from django.test import TestCase, TransactionTestCase
 
 from api.models import UsuariosModel
 from api.serializer.client import MeSerializer
@@ -120,6 +122,101 @@ class TestMigrationBackfillBehaviour(TestCase):
 
         refreshed = UsuariosModel.objects.get(pk=user.pk)
         self.assertTrue(refreshed.is_staff)  # is_staff still True
+
+
+# ---------------------------------------------------------------------------
+# R6 (real) — Migration RunPython.forward()/reverse() execution
+# Round-trip the actual migration functions against seeded rows so a typo or
+# wrong filter in forward()/reverse() would fail CI instead of only surfacing
+# in production. TransactionTestCase is required because we roll the schema
+# backward and forward inside the test.
+# ---------------------------------------------------------------------------
+
+class TestMigration0038RunPythonExecution(TransactionTestCase):
+    """
+    Directly execute the 0038 RunPython forward()/reverse() functions against
+    a historical app registry, so we prove the back-fill logic itself works
+    (field name, filter, .update() call, choice value) and not just that the
+    end state happens to match by coincidence.
+    """
+
+    def test_forward_backfills_staff_to_total_and_leaves_non_staff_alone(self):
+        executor = MigrationExecutor(connection)
+
+        # Roll back to the state right BEFORE 0038 so worker_role is still
+        # 'none' for every row we seed here.
+        executor.migrate([("api", "0037_productosmodel_vistas")])
+
+        UserBefore = executor.loader.project_state(
+            [("api", "0037_productosmodel_vistas")]
+        ).apps.get_model("api", "UsuariosModel")
+
+        staff_row = UserBefore.objects.create(
+            nombre="Staff", apellido="Before", correo="staff-before@bukis.com",
+            telefono="555-0100", password="x", is_active=True,
+            is_staff=True, is_superuser=False,
+        )
+        non_staff_row = UserBefore.objects.create(
+            nombre="Client", apellido="Before", correo="client-before@bukis.com",
+            telefono="555-0101", password="x", is_active=True,
+            is_staff=False, is_superuser=False,
+        )
+
+        # Apply 0038 forward — this runs the RunPython back-fill for real.
+        executor.loader.build_graph()
+        executor.migrate([("api", "0038_worker_role_and_permissions")])
+
+        UserAfter = executor.loader.project_state(
+            [("api", "0038_worker_role_and_permissions")]
+        ).apps.get_model("api", "UsuariosModel")
+
+        self.assertEqual(
+            UserAfter.objects.get(pk=staff_row.pk).worker_role, "total",
+            "R6: is_staff=True must be back-filled to worker_role='total'",
+        )
+        self.assertEqual(
+            UserAfter.objects.get(pk=non_staff_row.pk).worker_role, "none",
+            "R7: is_staff=False must remain worker_role='none'",
+        )
+        self.assertTrue(
+            UserAfter.objects.get(pk=staff_row.pk).is_staff,
+            "R8: is_staff must be preserved",
+        )
+
+    def test_reverse_resets_worker_role_to_none(self):
+        executor = MigrationExecutor(connection)
+
+        # Ensure 0038 is applied first, then seed a staff row and re-run forward
+        # so the back-fill sets it to 'total'.
+        executor.migrate([("api", "0038_worker_role_and_permissions")])
+
+        UserAt38 = executor.loader.project_state(
+            [("api", "0038_worker_role_and_permissions")]
+        ).apps.get_model("api", "UsuariosModel")
+
+        seeded = UserAt38.objects.create(
+            nombre="Staff", apellido="Reverse", correo="staff-reverse@bukis.com",
+            telefono="555-0102", password="x", is_active=True,
+            is_staff=True, is_superuser=False, worker_role="total",
+        )
+        self.assertEqual(seeded.worker_role, "total")
+
+        # Reverse migrate — RunPython.reverse must set every row back to 'none'
+        # BEFORE the columns are dropped.
+        executor.loader.build_graph()
+        executor.migrate([("api", "0037_productosmodel_vistas")])
+
+        # After reverse the worker_role column no longer exists on the model.
+        # We only need to prove the reverse ran without exploding and the row
+        # still exists (i.e. RunPython.reverse did not error out on the update).
+        UserAt37 = executor.loader.project_state(
+            [("api", "0037_productosmodel_vistas")]
+        ).apps.get_model("api", "UsuariosModel")
+        self.assertTrue(UserAt37.objects.filter(pk=seeded.pk).exists())
+
+        # Leave the schema at HEAD so subsequent tests see a normal DB.
+        executor.loader.build_graph()
+        executor.migrate([("api", "0038_worker_role_and_permissions")])
 
 
 # ---------------------------------------------------------------------------

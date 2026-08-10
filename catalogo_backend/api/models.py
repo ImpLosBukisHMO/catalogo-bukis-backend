@@ -75,6 +75,13 @@ class AdministradorDeUsuarios(BaseUserManager):
         usuario.is_active = True
         usuario.is_staff = staff
         usuario.is_superuser = superuser
+        # Keep worker_role in sync with staff flag so new staff accounts
+        # created post-migration are not silently locked out of IsWorker-gated
+        # endpoints. The 0038 migration back-fills existing is_staff=True rows
+        # to 'total'; this mirrors that invariant for every new account created
+        # through the manager (createsuperuser, Django Admin, seed scripts).
+        if staff:
+            usuario.worker_role = self.model.WorkerRole.TOTAL
         usuario.save()
 
         return usuario
