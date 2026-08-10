@@ -1,5 +1,6 @@
 from django.urls import reverse
 from rest_framework import serializers
+from rest_framework.exceptions import PermissionDenied
 
 from api.models import (
     ProductosModel,
@@ -179,6 +180,30 @@ class ProductosImagenesSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def validate(self, attrs):
+        producto = attrs.get("producto") or getattr(self.instance, "producto", None)
+        variante = attrs.get("variante", getattr(self.instance, "variante", None))
+
+        if producto and variante and variante.producto_id != producto.id:
+            raise serializers.ValidationError(
+                {"variante_id": "La variante no pertenece a este producto."}
+            )
+
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if (
+            user
+            and getattr(user, "is_authenticated", False)
+            and getattr(user, "worker_role", "none") == "parcial"
+            and producto
+            and producto.worker_id != user.id
+        ):
+            raise PermissionDenied(
+                "No tienes permisos para modificar imágenes de este producto."
+            )
+
+        return attrs
 
 
 # =========================
