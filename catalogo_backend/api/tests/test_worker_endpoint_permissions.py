@@ -341,7 +341,7 @@ class WorkerEndpointPermissionsTest(TestCase):
         )
         self.assertEqual(ProductosImagenesModel.objects.count(), 0)
 
-    def test_product_image_post_permissions_follow_can_edit_products(self):
+    def test_product_image_post_permissions_follow_capability_and_product_ownership(self):
         owner = _create_worker("image-owner-2@test.com", UsuariosModel.WorkerRole.TOTAL)
         product = _create_product(owner, "Image Permission Product")
         list_url = reverse("productos-imagenes-list-create")
@@ -355,21 +355,23 @@ class WorkerEndpointPermissionsTest(TestCase):
             UsuariosModel.WorkerRole.PARCIAL,
             can_edit_products=True,
         )
+        own_product = _create_product(allowed_partial, "Owned Image Product")
         total_worker = _create_worker("image-total-ok@test.com", UsuariosModel.WorkerRole.TOTAL)
 
         scenarios = [
-            (denied_worker, status.HTTP_403_FORBIDDEN, 0),
-            (allowed_partial, status.HTTP_201_CREATED, 1),
-            (total_worker, status.HTTP_201_CREATED, 2),
+            (denied_worker, product, status.HTTP_403_FORBIDDEN, 0),
+            (allowed_partial, product, status.HTTP_403_FORBIDDEN, 0),
+            (allowed_partial, own_product, status.HTTP_201_CREATED, 1),
+            (total_worker, product, status.HTTP_201_CREATED, 2),
         ]
 
-        for worker, expected_status, expected_count in scenarios:
-            with self.subTest(worker=worker.correo):
+        for worker, target_product, expected_status, expected_count in scenarios:
+            with self.subTest(worker=worker.correo, product_id=target_product.id):
                 self.client.force_authenticate(user=worker)
                 response = self.client.post(
                     list_url,
                     {
-                        "producto_id": product.id,
+                        "producto_id": target_product.id,
                         "imagen": _gif_file(f"{worker.worker_role}-{expected_count}.gif"),
                         "orden": expected_count,
                         "es_principal": expected_count == 0,
@@ -400,6 +402,40 @@ class WorkerEndpointPermissionsTest(TestCase):
         delete_response = self.client.delete(detail_url)
         self.assertEqual(delete_response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertTrue(ProductosImagenesModel.objects.filter(id=image.id).exists())
+
+    def test_partial_worker_cannot_patch_or_delete_foreign_legacy_image(self):
+        owner = _create_worker("image-owner-4@test.com", UsuariosModel.WorkerRole.TOTAL)
+        foreign_product = _create_product(owner, "Foreign Image Product")
+        foreign_image = _create_product_image(foreign_product, orden=1)
+        partial_worker = _create_worker(
+            "image-partial-mutation@test.com",
+            UsuariosModel.WorkerRole.PARCIAL,
+            can_edit_products=True,
+        )
+        own_product = _create_product(partial_worker, "Own Image Product")
+        own_image = _create_product_image(own_product, orden=2)
+
+        self.client.force_authenticate(user=partial_worker)
+
+        foreign_detail_url = reverse("productos-imagenes-detail", args=[foreign_image.id])
+        patch_response = self.client.patch(foreign_detail_url, {"orden": 9}, format="json")
+        self.assertEqual(patch_response.status_code, status.HTTP_403_FORBIDDEN)
+        foreign_image.refresh_from_db()
+        self.assertEqual(foreign_image.orden, 1)
+
+        delete_response = self.client.delete(foreign_detail_url)
+        self.assertEqual(delete_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(ProductosImagenesModel.objects.filter(id=foreign_image.id).exists())
+
+        own_detail_url = reverse("productos-imagenes-detail", args=[own_image.id])
+        own_patch_response = self.client.patch(own_detail_url, {"orden": 7}, format="json")
+        self.assertEqual(own_patch_response.status_code, status.HTTP_200_OK, own_patch_response.data)
+        own_image.refresh_from_db()
+        self.assertEqual(own_image.orden, 7)
+
+        own_delete_response = self.client.delete(own_detail_url)
+        self.assertEqual(own_delete_response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(ProductosImagenesModel.objects.filter(id=own_image.id).exists())
 
     def test_variant_patch_requires_edit_products_and_edit_prices_without_mutation(self):
         worker = _create_worker(
