@@ -74,6 +74,10 @@ class APIIniciarSesion(views.APIView):
         res = response.Response({"mensaje": "Autenticación exitosa"})
         res.set_cookie(key='access_token', value=str(refresh.access_token), httponly=True, samesite='Lax')
         res.set_cookie(key='refresh_token', value=str(refresh), httponly=True, samesite='Lax')
+        
+        from django.middleware.csrf import get_token
+        get_token(request) # Ensure CSRF token is sent
+        
         return res
 
 
@@ -168,6 +172,7 @@ class APICerrarSesion(views.APIView):
         res.delete_cookie(key='access_token', path='/', samesite='Lax')
         res.delete_cookie(key='refresh_token', path='/', samesite='Lax')
         res.delete_cookie(key='jwt', path='/', samesite='Lax')
+        res.delete_cookie(key='csrftoken', path='/', samesite='Lax')
         return res
         
         
@@ -193,6 +198,10 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             refresh_token = res.data.get('refresh')
             res.set_cookie(key='access_token', value=access_token, httponly=True, samesite='Lax')
             res.set_cookie(key='refresh_token', value=refresh_token, httponly=True, samesite='Lax')
+            
+            from django.middleware.csrf import get_token
+            get_token(request) # Ensure CSRF token is sent
+            
         return res
 
 
