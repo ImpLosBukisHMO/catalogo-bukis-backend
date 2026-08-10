@@ -15,6 +15,8 @@ from api.serializer.client import MiPedidoComprobanteUpdateSerializer
 from api.models import PedidosModel, PedidoProductosModel
 from api.utils.comprobantes import build_comprobante_response
 from api.utils.emails import send_comprobante_pago_worker_email
+# pyrefly: ignore [missing-import]
+from api.permissions import IsWorker
 
 
 logger = logging.getLogger(__name__)
@@ -22,8 +24,14 @@ logger = logging.getLogger(__name__)
 
 # ---PEDIDOS VIEWS--- #
 class PedidosListCreate(generics.ListCreateAPIView):
+    """
+    Endpoint interno para uso exclusivo de workers/admin.
+    Protegido contra IDOR: requiere autenticación y rol de staff.
+    Los clientes deben usar /api/mis-pedidos/ para acceder a sus propios pedidos.
+    """
     queryset = PedidosModel.objects.all()
     serializer_class = PedidosSerializer
+    permission_classes = [IsAuthenticated, IsWorker]
 
     def post(self, request, *args, **kwargs):
         serializer = PedidosSerializer(data=request.data)
@@ -39,9 +47,15 @@ class PedidosListCreate(generics.ListCreateAPIView):
 
 
 class PedidosRetrieveUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Endpoint interno para uso exclusivo de workers/admin.
+    Protegido contra IDOR: requiere autenticación y rol de staff.
+    Los clientes deben usar /api/mis-pedidos/ para acceder a sus propios pedidos.
+    """
     queryset = PedidosModel.objects.all()
     serializer_class = PedidosSerializer
     lookup_field = 'id'
+    permission_classes = [IsAuthenticated, IsWorker]
 
     def get(self, request, *args, **kwargs):
         try:
@@ -73,8 +87,13 @@ class PedidosRetrieveUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
 
 # --- PEDIDOS PRODUCTOS VIEWS --- #
 class PedidoProductosListCreate(generics.ListCreateAPIView): 
+    """
+    Endpoint interno para uso exclusivo de workers/admin.
+    Protegido contra IDOR: requiere autenticación y rol de staff.
+    """
     queryset = PedidoProductosModel.objects.all()
     serializer_class = PedidoProductosSerializer
+    permission_classes = [IsAuthenticated, IsWorker]
 
     def post(self, request, *args, **kwargs):
         serializer = PedidoProductosSerializer(data=request.data)
@@ -85,9 +104,14 @@ class PedidoProductosListCreate(generics.ListCreateAPIView):
 
 
 class PedidoProductosRetrieveUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Endpoint interno para uso exclusivo de workers/admin.
+    Protegido contra IDOR: requiere autenticación y rol de staff.
+    """
     queryset = PedidoProductosModel.objects.all()
     serializer_class = PedidoProductosSerializer
     lookup_field = 'id'
+    permission_classes = [IsAuthenticated, IsWorker]
 
     def get(self, request, *args, **kwargs):
         try:

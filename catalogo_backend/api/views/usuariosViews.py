@@ -2,6 +2,7 @@ from django.http import Http404
 from rest_framework import generics, status
 from rest_framework.response import Response
 from api.models import UsuariosModel
+# pyrefly: ignore [missing-import]
 from ..serializers import UsuariosSerializer
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
@@ -73,5 +74,7 @@ class MiUsuarioView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        from django.middleware.csrf import get_token
+        get_token(request) # Ensure CSRF token is set
         serializer = MeSerializer(request.user)
         return Response(serializer.data)

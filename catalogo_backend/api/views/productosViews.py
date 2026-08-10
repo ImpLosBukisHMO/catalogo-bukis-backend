@@ -4,6 +4,7 @@ from rest_framework.exceptions import ValidationError
 from api.models import ProductosModel
 from api.pagination import PublicCatalogPagination
 from api.serializers import ProductosSerializer, ProductoDetalleSerializer
+from django.db.models import Q
 
 
 class ProductosListCreate(generics.ListCreateAPIView):
@@ -99,3 +100,90 @@ class ProductosRetrieveUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
 
     def get_serializer_class(self):
         return ProductoDetalleSerializer
+
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from django.db.models import Sum
+
+class ProductosNovedadesList(generics.ListAPIView):
+    serializer_class = ProductosSerializer
+    permission_classes = [AllowAny]
+    pagination_class = None
+
+    def get_queryset(self):
+        return ProductosModel.objects.filter(
+            disponible=True,
+            estado=ProductosModel.EstadoProducto.ACTIVE,
+        ).order_by("-created_at")[:10]
+
+
+class ProductosMasVistosList(generics.ListAPIView):
+    serializer_class = ProductosSerializer
+    permission_classes = [AllowAny]
+    pagination_class = None
+
+    def get_queryset(self):
+        return ProductosModel.objects.filter(
+            disponible=True,
+            estado=ProductosModel.EstadoProducto.ACTIVE,
+        ).order_by("-vistas")[:10]
+
+
+class ProductosMenosVistosList(generics.ListAPIView):
+    serializer_class = ProductosSerializer
+    permission_classes = [AllowAny]
+    pagination_class = None
+
+    def get_queryset(self):
+        return ProductosModel.objects.filter(
+            disponible=True,
+            estado=ProductosModel.EstadoProducto.ACTIVE,
+        ).order_by("vistas")[:10]
+
+
+class ProductosMasVendidosList(generics.ListAPIView):
+    serializer_class = ProductosSerializer
+    permission_classes = [AllowAny]
+    pagination_class = None
+
+    def get_queryset(self):
+        # Annotate each product with the sum of quantities from related order items
+        # where the order is not canceled.
+        from api.models import PedidosModel
+        return ProductosModel.objects.filter(
+            disponible=True,
+            estado=ProductosModel.EstadoProducto.ACTIVE,
+        ).annotate(
+            total_vendidos=Sum('producto_colores__pedido_items__cantidad', filter=~Q(producto_colores__pedido_items__pedido__estado=PedidosModel.EstadoPedido.CANCELADO))
+        ).order_by("-total_vendidos")[:10]
+
+
+class ProductosMenosVendidosList(generics.ListAPIView):
+    serializer_class = ProductosSerializer
+    permission_classes = [AllowAny]
+    pagination_class = None
+
+    def get_queryset(self):
+        # Annotate each product with the sum of quantities from related order items
+        # where the order is not canceled.
+        from api.models import PedidosModel
+        return ProductosModel.objects.filter(
+            disponible=True,
+            estado=ProductosModel.EstadoProducto.ACTIVE,
+        ).annotate(
+            total_vendidos=Sum('producto_colores__pedido_items__cantidad', filter=~Q(producto_colores__pedido_items__pedido__estado=PedidosModel.EstadoPedido.CANCELADO))
+        ).order_by("total_vendidos")[:10]
+
+
+class ReportarVistaProducto(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, id):
+        try:
+            producto = ProductosModel.objects.get(id=id)
+            producto.vistas += 1
+            producto.save(update_fields=['vistas'])
+            return Response({"message": "Vista registrada."})
+        except ProductosModel.DoesNotExist:
+            return Response({"error": "Producto no encontrado."}, status=404)
