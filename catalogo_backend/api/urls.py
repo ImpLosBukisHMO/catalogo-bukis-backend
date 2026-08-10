@@ -1,4 +1,6 @@
 # pyrefly: ignore [missing-import]
+from api.views.productosViews import ProductosMenosVendidosList
+from api.views.productosViews import ProductosMenosVistosList
 from api.apis import CustomTokenObtainPairView, CookieTokenRefreshView
 from django.urls import path
 from api.views.descuentosViews import DescuentosRetrieveUpdateDestroy
@@ -86,10 +88,12 @@ urlpatterns = [
     path("producto-variantes/", ProductoVariantesListCreateView.as_view(), name="producto-variantes-list-create"),
     path("producto-variantes/<int:id>/", ProductoVariantesDetailView.as_view(), name="producto-variantes-detail"),
 
-    # Productos (Tridente)
+    # Productos (KPIs)
     path("productos/novedades/", ProductosNovedadesList.as_view(), name="productos-novedades"),
     path("productos/mas-vistos/", ProductosMasVistosList.as_view(), name="productos-mas-vistos"),
     path("productos/mas-vendidos/", ProductosMasVendidosList.as_view(), name="productos-mas-vendidos"),
+    path("productos/menos-vistos/", ProductosMenosVistosList.as_view(), name="productos-menos-vistos"),
+    path("productos/menos-vendidos/", ProductosMenosVendidosList.as_view(), name="productos-menos-vendidos"),
     path("productos/<int:id>/ver/", ReportarVistaProducto.as_view(), name="productos-reportar-vista"),
 
     # Productos
