@@ -2,6 +2,10 @@ import dataclasses
 import datetime
 import jwt
 import random
+import threading
+import logging
+
+logger = logging.getLogger(__name__)
 from django.conf import settings
 from django.utils import timezone
 # pyrefly: ignore [missing-import]
@@ -70,14 +74,14 @@ def generar_codigo_confirmacion(usuario: UsuariosModel):
     return codigo
 
 
-def enviar_correo_confirmacion(usuario: UsuariosModel):
-    codigo = generar_codigo_confirmacion(usuario)
+def _send_confirmation_email_bg(usuario_id: int, nombre: str, correo: str, codigo: str):
+    """Envía el correo de confirmación en segundo plano (thread). Nunca bloquea la petición HTTP."""
     mail_subject = "🔑 Tu código de verificación | Importaciones Los Bukis"
     html_body = f"""
     <div style="font-family: sans-serif; text-align: center; color: #333;">
         <h2 style="color: #d32f2f;">¡Bienvenido a Los Bukis!</h2>
         <p style="font-size: 1.1em; line-height: 1.5;">
-            Gracias por registrarte. Para activar tu cuenta y comenzar a realizar pedidos, 
+            Gracias por registrarte. Para activar tu cuenta y comenzar a realizar pedidos,
             ingresa el siguiente código de 6 dígitos en la página web:
         </p>
         <div style="margin: 30px 0;">
@@ -90,18 +94,27 @@ def enviar_correo_confirmacion(usuario: UsuariosModel):
         </p>
     </div>
     """
-    
     try:
         send_bukis_email(
-            recipient_name=usuario.nombre,
-            recipient_email=usuario.correo,
+            recipient_name=nombre,
+            recipient_email=correo,
             mail_subject=mail_subject,
             html_body=html_body,
         )
-        return True, "Correo enviado"
     except Exception as e:
-        print(f"Error de SMTP al enviar correo a {usuario.correo}: {e}")
-        return False, str(e)
+        logger.error("Error de SMTP al enviar correo de confirmación a %s (user_id=%s): %s", correo, usuario_id, e)
+
+
+def enviar_correo_confirmacion(usuario: UsuariosModel):
+    codigo = generar_codigo_confirmacion(usuario)
+    # Envío en segundo plano: la petición HTTP retorna de inmediato sin esperar al SMTP.
+    t = threading.Thread(
+        target=_send_confirmation_email_bg,
+        args=(usuario.id, usuario.nombre, usuario.correo, codigo),
+        daemon=True,
+    )
+    t.start()
+    return True, "Correo enviado"
 
 
 def confirmar_cuenta_codigo(correo: str, codigo: str):
@@ -142,8 +155,8 @@ def reenviar_correo_confirmacion(correo: str):
     return True, f"Se ha reenviado el correo de confirmación exitosamente. En caso de que el correo haya llegado a la sección de SPAM, verifique que el remitente sea \"{settings.EMAIL_HOST_USER}\"."
 
 
-def enviar_correo_recuperacion(usuario: UsuariosModel):
-    codigo = generar_codigo_confirmacion(usuario)
+def _send_recovery_email_bg(usuario_id: int, nombre: str, correo: str, codigo: str):
+    """Envía el correo de recuperación en segundo plano (thread). Nunca bloquea la petición HTTP."""
     mail_subject = "🔒 Recuperación de contraseña | Importaciones Los Bukis"
     html_body = f"""
     <div style="font-family: sans-serif; text-align: center; color: #333;">
@@ -161,18 +174,27 @@ def enviar_correo_recuperacion(usuario: UsuariosModel):
         </p>
     </div>
     """
-    
     try:
         send_bukis_email(
-            recipient_name=usuario.nombre,
-            recipient_email=usuario.correo,
+            recipient_name=nombre,
+            recipient_email=correo,
             mail_subject=mail_subject,
             html_body=html_body,
         )
-        return True, "Correo de recuperación enviado"
     except Exception as e:
-        print(f"Error de SMTP al enviar correo a {usuario.correo}: {e}")
-        return False, str(e)
+        logger.error("Error de SMTP al enviar correo de recuperación a %s (user_id=%s): %s", correo, usuario_id, e)
+
+
+def enviar_correo_recuperacion(usuario: UsuariosModel):
+    codigo = generar_codigo_confirmacion(usuario)
+    # Envío en segundo plano: la petición HTTP retorna de inmediato sin esperar al SMTP.
+    t = threading.Thread(
+        target=_send_recovery_email_bg,
+        args=(usuario.id, usuario.nombre, usuario.correo, codigo),
+        daemon=True,
+    )
+    t.start()
+    return True, "Correo de recuperación enviado"
 
 
 def restablecer_password(correo: str, codigo: str, nueva_password: str):
