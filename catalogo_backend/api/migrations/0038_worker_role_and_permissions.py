@@ -1,8 +1,12 @@
 """
-Migration 0032: Add worker_role + 6 capability flag columns to UsuariosModel.
+Migration 0038: Add worker_role + 6 capability flag columns to UsuariosModel.
 Includes a data back-fill: existing is_staff=True users get worker_role='total'.
 Reverse resets all rows to worker_role='none' (columns dropped by RemoveField
 if a full rollback follows).
+
+Renumbered from 0032 → 0038 during merge with main (main advanced through
+0032..0037 for email verification, comprobante deadline, refund flag, and
+product views). Dependency updated accordingly.
 """
 
 from django.db import migrations, models
@@ -23,7 +27,7 @@ def reverse(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("api", "0031_pedidosmodel_comprobante_pago"),
+        ("api", "0037_productosmodel_vistas"),
     ]
 
     operations = [
