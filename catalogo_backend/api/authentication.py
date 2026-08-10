@@ -1,5 +1,7 @@
+from django.core.exceptions import PermissionDenied
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken, AuthenticationFailed, TokenError
+from rest_framework.exceptions import PermissionDenied
 
 class JWTCookieAuthentication(JWTAuthentication):
     def authenticate(self, request):
@@ -28,11 +30,16 @@ class JWTCookieAuthentication(JWTAuthentication):
                 validated_token = self.get_validated_token(raw_token)
                 user = self.get_user(validated_token)
                 # CSRF solo aplica en métodos no seguros (POST, PUT, PATCH, DELETE).
-                # Los métodos seguros (GET, HEAD, OPTIONS) no requieren CSRF.
+                # Excluimos la ruta de logout para no atascar sesiones.
                 if request.method not in ('GET', 'HEAD', 'OPTIONS', 'TRACE'):
-                    self.enforce_csrf(request)
+                    if getattr(request, 'path', '') != '/api/logout/':
+                        self.enforce_csrf(request)
                 return user, validated_token
-            except (InvalidToken, AuthenticationFailed, TokenError):
+            except PermissionDenied as e:
+                raise e
+            except AuthenticationFailed as e:
+                pass
+            except (InvalidToken, TokenError):
                 pass
 
         # Si no hay token válido, retornamos None (Usuario Anónimo)
@@ -47,4 +54,5 @@ class JWTCookieAuthentication(JWTAuthentication):
         check.process_request(request)
         reason = check.process_view(request, None, (), {})
         if reason:
-            raise AuthenticationFailed(f'CSRF Failed: {reason}')
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied(f'CSRF Failed: {reason}')

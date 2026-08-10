@@ -130,6 +130,18 @@ class ProductosMasVistosList(generics.ListAPIView):
         ).order_by("-vistas")[:10]
 
 
+class ProductosMenosVistosList(generics.ListAPIView):
+    serializer_class = ProductosSerializer
+    permission_classes = [AllowAny]
+    pagination_class = None
+
+    def get_queryset(self):
+        return ProductosModel.objects.filter(
+            disponible=True,
+            estado=ProductosModel.EstadoProducto.ACTIVE,
+        ).order_by("vistas")[:10]
+
+
 class ProductosMasVendidosList(generics.ListAPIView):
     serializer_class = ProductosSerializer
     permission_classes = [AllowAny]
@@ -145,6 +157,23 @@ class ProductosMasVendidosList(generics.ListAPIView):
         ).annotate(
             total_vendidos=Sum('producto_colores__pedido_items__cantidad', filter=~Q(producto_colores__pedido_items__pedido__estado=PedidosModel.EstadoPedido.CANCELADO))
         ).order_by("-total_vendidos")[:10]
+
+
+class ProductosMenosVendidosList(generics.ListAPIView):
+    serializer_class = ProductosSerializer
+    permission_classes = [AllowAny]
+    pagination_class = None
+
+    def get_queryset(self):
+        # Annotate each product with the sum of quantities from related order items
+        # where the order is not canceled.
+        from api.models import PedidosModel
+        return ProductosModel.objects.filter(
+            disponible=True,
+            estado=ProductosModel.EstadoProducto.ACTIVE,
+        ).annotate(
+            total_vendidos=Sum('producto_colores__pedido_items__cantidad', filter=~Q(producto_colores__pedido_items__pedido__estado=PedidosModel.EstadoPedido.CANCELADO))
+        ).order_by("total_vendidos")[:10]
 
 
 class ReportarVistaProducto(APIView):
