@@ -7,6 +7,7 @@ Pruebas para el flujo de creación y confirmación de cuenta:
 """
 import datetime
 
+from django.core.cache import cache
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -135,6 +136,10 @@ class RegistroTests(TestCase):
 class LoginSinVerificarTests(TestCase):
 
     def setUp(self):
+        # LoginByIpThrottle / LoginByAccountThrottle usan el cache de Django
+        # para contar intentos. Sin limpiar entre tests, los logins previos
+        # de la suite disparan 429 en tests posteriores (flaky en CI).
+        cache.clear()
         self.client = APIClient()
 
     def test_login_sin_verificar_retorna_401(self):
