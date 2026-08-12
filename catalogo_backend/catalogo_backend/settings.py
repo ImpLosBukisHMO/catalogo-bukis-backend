@@ -128,6 +128,46 @@ CORS_ALLOW_ALL_ORIGINS = DEBUG  # Only allow all in development
 CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',') if not DEBUG else []
 CORS_ALLOW_CREDENTIALS = True
 
+# --- Cookie security (cross-site auth) ------------------------------------
+# En producción el frontend y el backend viven en dominios distintos (Railway),
+# por lo que las cookies de auth deben viajar en contexto cross-site.
+# Regla del navegador: cross-site requiere SameSite=None + Secure=True.
+# En desarrollo (DEBUG=True) usamos SameSite=Lax + Secure=False para poder
+# trabajar contra localhost sin HTTPS.
+#
+# Además, Railway termina TLS en su proxy y forwardea HTTP internamente.
+# Sin SECURE_PROXY_SSL_HEADER, Django ve request.is_secure() == False y
+# descarta silenciosamente las cookies marcadas con Secure=True.
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+COOKIE_SAMESITE = 'Lax' if DEBUG else 'None'
+COOKIE_SECURE = not DEBUG
+
+# Cookies gestionadas por Django (CSRF y sesión del admin)
+CSRF_COOKIE_SAMESITE = COOKIE_SAMESITE
+CSRF_COOKIE_SECURE = COOKIE_SECURE
+SESSION_COOKIE_SAMESITE = COOKIE_SAMESITE
+SESSION_COOKIE_SECURE = COOKIE_SECURE
+
+
+def cookie_security_kwargs():
+    """Kwargs para response.set_cookie / delete_cookie en las views de auth.
+
+    Centralizado para que login, refresh y logout compartan exactamente
+    los mismos atributos. Sin esto, el browser no matchea el delete_cookie
+    con el set_cookie original y las cookies quedan huérfanas al hacer logout.
+
+    Lee los settings dinámicamente en cada llamada para respetar
+    @override_settings en tests y cualquier cambio en runtime.
+    """
+    from django.conf import settings as _django_settings
+    return {
+        'samesite': _django_settings.COOKIE_SAMESITE,
+        'secure': _django_settings.COOKIE_SECURE,
+    }
+# --------------------------------------------------------------------------
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Email — Mailtrap en desarrollo, SMTP real en producción
