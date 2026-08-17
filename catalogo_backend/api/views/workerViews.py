@@ -45,6 +45,11 @@ from api.serializer.worker import (
     WorkerImagenCreateSerializer,
 )
 from api.utils.comprobantes import build_comprobante_response
+from api.utils.recibos import (
+    RECIBO_ALLOWED_STATES,
+    build_recibo_response_for_pedido,
+)
+from django.shortcuts import get_object_or_404
 
 
 # =========================
@@ -177,6 +182,24 @@ class WorkerPedidoComprobanteDownloadView(APIView):
             return Response({"error": "El pedido no tiene comprobante."}, status=status.HTTP_404_NOT_FOUND)
 
         return build_comprobante_response(pedido.comprobante_pago)
+
+
+class WorkerPedidoReciboPdfView(APIView):
+    permission_classes = [IsAuthenticated, IsWorker]
+
+    def get(self, request, pedido_id):
+        pedido = get_object_or_404(
+            PedidosModel.objects.select_related("cliente", "direccion").prefetch_related("items"),
+            pk=pedido_id,
+        )
+
+        if pedido.estado not in RECIBO_ALLOWED_STATES:
+            return Response(
+                {"error": "El recibo no está disponible para el estado actual del pedido."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        return build_recibo_response_for_pedido(pedido)
 
 
 # =========================
