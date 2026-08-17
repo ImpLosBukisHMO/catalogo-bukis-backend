@@ -27,7 +27,7 @@ from api.serializers import (
     ProductoDetalleSerializer,
     ProductosSerializer,
 )
-from api.utils.imagenes import get_variante_imagen
+from api.utils.imagenes import get_public_product_gallery_images, get_variante_imagen
 
 
 def _media_url(path: str) -> str:
@@ -337,6 +337,120 @@ class PublicProductImageEndpointContractTest(ImageStorageTestCase):
                 _media_url("img/products/galeria/gallery-list-valid.jpg")
             )
         )
+
+    def test_public_product_images_list_returns_one_valid_image_for_same_variant(self):
+        producto = _create_product("One Per Variant", imagen="")
+        variante = _create_variant(producto, _create_color("Unica", "#101010"))
+        expected = _attach_image(
+            producto,
+            variante=variante,
+            path="img/products/galeria/one-per-variant-principal.jpg",
+            es_principal=True,
+            orden=5,
+        )
+        _attach_image(
+            producto,
+            variante=variante,
+            path="img/products/galeria/one-per-variant-secondary.jpg",
+            orden=0,
+        )
+
+        response = self.client.get(f"/api/productos-imagenes/?producto={producto.id}")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual([item["id"] for item in response.data], [expected.id])
+
+    def test_public_product_images_list_returns_one_valid_image_per_variant(self):
+        producto = _create_product("Two Variants", imagen="")
+        variante_a = _create_variant(producto, _create_color("A", "#220011"))
+        variante_b = _create_variant(producto, _create_color("B", "#003322"))
+        image_a = _attach_image(
+            producto,
+            variante=variante_a,
+            path="img/products/galeria/two-variants-a.jpg",
+            orden=1,
+        )
+        image_b = _attach_image(
+            producto,
+            variante=variante_b,
+            path="img/products/galeria/two-variants-b.jpg",
+            orden=2,
+        )
+
+        response = self.client.get(f"/api/productos-imagenes/?producto={producto.id}")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual([item["id"] for item in response.data], [image_a.id, image_b.id])
+
+    def test_public_product_images_list_skips_missing_same_variant_and_keeps_valid_one(self):
+        producto = _create_product("Mixed Variant", imagen="")
+        variante = _create_variant(producto, _create_color("Mix", "#AB1200"))
+        _attach_image(
+            producto,
+            variante=variante,
+            path="img/products/galeria/mixed-variant-missing.jpg",
+            es_principal=True,
+            orden=0,
+            create_file=False,
+        )
+        expected = _attach_image(
+            producto,
+            variante=variante,
+            path="img/products/galeria/mixed-variant-valid.jpg",
+            orden=1,
+        )
+
+        response = self.client.get(f"/api/productos-imagenes/?producto={producto.id}")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual([item["id"] for item in response.data], [expected.id])
+
+    def test_worker_product_images_list_keeps_all_valid_rows_for_management(self):
+        worker = _create_user("gallery-worker@test.com", staff=True)
+        worker.can_edit_products = True
+        worker.save(update_fields=["can_edit_products"])
+        self.client.force_authenticate(user=worker)
+
+        producto = _create_product("Worker Gallery", imagen="")
+        variante = _create_variant(producto, _create_color("Worker", "#4455AA"))
+        image_a = _attach_image(
+            producto,
+            variante=variante,
+            path="img/products/galeria/worker-gallery-a.jpg",
+            es_principal=True,
+            orden=0,
+        )
+        image_b = _attach_image(
+            producto,
+            variante=variante,
+            path="img/products/galeria/worker-gallery-b.jpg",
+            orden=1,
+        )
+
+        response = self.client.get(f"/api/productos-imagenes/?producto={producto.id}")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual([item["id"] for item in response.data], [image_a.id, image_b.id])
+
+
+class PublicProductGalleryHelperTest(ImageStorageTestCase):
+    def test_helper_returns_single_product_level_fallback_image(self):
+        producto = _create_product("Product Fallback Only", imagen="")
+        _attach_image(
+            producto,
+            path="img/products/galeria/product-fallback-secondary.jpg",
+            orden=0,
+        )
+        expected = _attach_image(
+            producto,
+            path="img/products/galeria/product-fallback-principal.jpg",
+            es_principal=True,
+            orden=5,
+        )
+
+        selected = get_public_product_gallery_images(producto.imagenes.order_by("orden", "id"))
+
+        self.assertEqual([image.id for image in selected], [expected.id])
 
 
 class VarianteImageHelperTest(ImageStorageTestCase):

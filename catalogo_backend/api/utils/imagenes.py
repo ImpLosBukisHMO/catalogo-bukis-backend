@@ -77,6 +77,47 @@ def get_existing_product_images(
     return [image for image in image_rows if _file_exists(image.imagen, exists_cache=exists_cache)]
 
 
+def _pick_best_image_candidate(image_rows):
+    principal = None
+    fallback = None
+
+    for image in image_rows:
+        if fallback is None:
+            fallback = image
+        if principal is None and image.es_principal:
+            principal = image
+
+    return principal or fallback
+
+
+def get_public_product_gallery_images(
+    image_rows,
+    *,
+    exists_cache: dict[tuple[int, str], bool] | None = None,
+):
+    """
+    Return at most one valid image per variant plus at most one valid product-level image.
+
+    Selection per group:
+      1. first valid principal image by orden/id
+      2. otherwise first valid image by orden/id
+    """
+
+    valid_images = get_existing_product_images(image_rows, exists_cache=exists_cache)
+    grouped_images: dict[int | None, list] = {}
+
+    for image in valid_images:
+        grouped_images.setdefault(image.variante_id, []).append(image)
+
+    selected_images = []
+    for grouped in grouped_images.values():
+        chosen = _pick_best_image_candidate(grouped)
+        if chosen is not None:
+            selected_images.append(chosen)
+
+    return sorted(selected_images, key=lambda image: (image.orden, image.id))
+
+
 def get_variante_imagen(
     variante: "ProductoVariantesModel", exists_cache: dict[tuple[int, str], bool] | None = None
 ) -> str | None:
