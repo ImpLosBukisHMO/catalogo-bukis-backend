@@ -227,6 +227,38 @@ class ImageConsumerCurrentBehaviorTest(ImageStorageTestCase):
         snapshot = PedidoProductosModel.objects.get(pedido_id=response.data["pedido_id"])
         self.assertEqual(snapshot.imagen_principal_snapshot, _media_url("img/products/galeria/checkout-variant-any.jpg"))
 
+    def test_checkout_snapshot_stores_empty_string_when_all_image_files_are_missing(self):
+        client = APIClient()
+        user = _create_user("checkout-image-missing@test.com")
+        client.force_authenticate(user=user)
+        producto = _create_product(
+            "Checkout Missing",
+            imagen="img/products/checkout-missing-legacy.jpg",
+            create_file=False,
+        )
+        variante = _create_variant(producto, _create_color("Grafito", "#333333"), stock=3)
+        _attach_image(
+            producto,
+            variante=variante,
+            path="img/products/galeria/checkout-missing-variant.jpg",
+            es_principal=True,
+            create_file=False,
+        )
+        _attach_image(
+            producto,
+            path="img/products/galeria/checkout-missing-product.jpg",
+            es_principal=True,
+            create_file=False,
+        )
+        carrito = CarritoModel.objects.create(cliente=user, estado="ACTIVE")
+        CarritoItemModel.objects.create(carrito=carrito, variante=variante, cantidad=1)
+
+        response = client.post("/api/carrito/checkout/", {}, format="json")
+
+        self.assertEqual(response.status_code, 201, response.data)
+        snapshot = PedidoProductosModel.objects.get(pedido_id=response.data["pedido_id"])
+        self.assertEqual(snapshot.imagen_principal_snapshot, "")
+
 
 class PublicProductImageEndpointContractTest(ImageStorageTestCase):
     def setUp(self):

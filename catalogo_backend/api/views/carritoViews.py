@@ -225,7 +225,7 @@ def carrito_checkout(request):
             precio_unit = v.precio_efectivo
             subtotal_linea = precio_unit * it.cantidad
 
-            imagen_snapshot = get_variante_imagen(v)
+            imagen_snapshot = get_variante_imagen(v) or ""
 
             PedidoProductosModel.objects.create(
                 pedido=pedido,
