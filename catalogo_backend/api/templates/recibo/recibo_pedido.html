@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Recibo #{{ folio }}</title>
+  <style>
+    @page { size: A4; margin: 20mm; }
+    body { font-family: Georgia, "Times New Roman", serif; color: #222222; font-size: 13px; line-height: 1.5; }
+    table { width: 100%; border-collapse: collapse; }
+    .header { text-align: center; border-bottom: 2px solid #222222; margin-bottom: 24px; }
+    .header-title { font-size: 22px; letter-spacing: 1px; padding-bottom: 4px; }
+    .header-subtitle { font-size: 11px; color: #666666; padding-bottom: 14px; }
+    .meta-row td { vertical-align: top; padding: 4px 0; font-size: 12px; }
+    .label { color: #666666; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; }
+    .value { font-weight: bold; color: #222222; }
+    .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #666666; border-bottom: 1px solid #cccccc; padding: 18px 0 4px; }
+    .client-block td { padding-top: 8px; }
+    .client-name { font-weight: bold; font-size: 14px; }
+    .client-contact { font-size: 12px; color: #555555; }
+    .items { margin-top: 8px; }
+    .items th { background-color: #f4f1ec; padding: 8px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #222222; }
+    .items td { padding: 10px 8px; border-bottom: 1px solid #eeeeee; font-size: 12px; }
+    .num { text-align: right; }
+    .totals { margin-top: 12px; }
+    .totals td { padding: 6px 8px; font-size: 12px; }
+    .totals .label { text-align: right; }
+    .totals .amount { width: 120px; text-align: right; font-weight: bold; }
+    .total-row td { border-top: 2px solid #222222; padding-top: 10px; font-size: 15px; }
+    .footer { margin-top: 40px; border-top: 1px solid #eeeeee; padding-top: 12px; text-align: center; font-size: 10px; color: #888888; font-style: italic; }
+  </style>
+</head>
+<body>
+  <table class="header">
+    <tr><td class="header-title">IMPORTACIONES LOS BUKIS</td></tr>
+    <tr><td class="header-subtitle">Recibo de pedido</td></tr>
+  </table>
+
+  <table class="meta-row">
+    <tr>
+      <td>
+        <div class="label">Folio</div>
+        <div class="value">#{{ folio }}</div>
+      </td>
+      <td class="num">
+        <div class="label">Fecha</div>
+        <div class="value">{{ fecha }}</div>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <div class="label">Estado</div>
+        <div class="value">{{ estado_label }}</div>
+      </td>
+      <td></td>
+    </tr>
+  </table>
+
+  <div class="section-title">Cliente</div>
+  <table class="client-block">
+    <tr><td class="client-name">{{ cliente.nombre }}</td></tr>
+    <tr><td class="client-contact">{{ cliente.email }}</td></tr>
+    <tr><td class="client-contact">{{ cliente.telefono }}</td></tr>
+  </table>
+
+  {% if direccion %}
+  <div class="section-title">Dirección de envío</div>
+  <table class="client-block">
+    <tr><td>{{ direccion.calle }}, {{ direccion.colonia }}</td></tr>
+    <tr><td>{{ direccion.ciudad }}, {{ direccion.estado }}, C.P. {{ direccion.codigo_postal }}</td></tr>
+    <tr><td>{{ direccion.pais }}</td></tr>
+  </table>
+  {% endif %}
+
+  <div class="section-title">Artículos</div>
+  <table class="items">
+    <thead>
+      <tr>
+        <th>Producto</th>
+        <th>Color</th>
+        <th class="num">Cant.</th>
+        <th class="num">P. Unit.</th>
+        <th class="num">Desc.</th>
+        <th class="num">Subtotal</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td>{{ item.producto_nombre_snapshot }}</td>
+        <td>{{ item.color_nombre_snapshot }}</td>
+        <td class="num">{{ item.cantidad }}</td>
+        <td class="num">${{ item.precio_unitario_snapshot|floatformat:2 }}</td>
+        <td class="num">{% if item.descuento_porcentaje_snapshot %}{{ item.descuento_porcentaje_snapshot|floatformat:-2 }}%{% else %}—{% endif %}</td>
+        <td class="num">${{ item.subtotal_linea_snapshot|floatformat:2 }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <table class="totals">
+    <tr>
+      <td class="label">Subtotal</td>
+      <td class="amount">${{ subtotal|floatformat:2 }}</td>
+    </tr>
+    <tr class="total-row">
+      <td class="label">Total</td>
+      <td class="amount">${{ total|floatformat:2 }}</td>
+    </tr>
+  </table>
+
+  <div class="footer">Gracias por su compra — {{ business_name }}</div>
+</body>
+</html>

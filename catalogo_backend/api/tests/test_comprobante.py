@@ -17,7 +17,7 @@ from api.serializer.worker import WorkerPedidoDetalleSerializer
 
 
 def create_user(*, email: str, staff: bool = False) -> UsuariosModel:
-    return UsuariosModel.objects.create_user(
+    user = UsuariosModel.objects.create_user(
         nombre="Test",
         apellido="User",
         correo=email,
@@ -25,6 +25,10 @@ def create_user(*, email: str, staff: bool = False) -> UsuariosModel:
         password="testpass123",
         staff=staff,
     )
+    if staff:
+        user.worker_role = UsuariosModel.WorkerRole.TOTAL
+        user.save(update_fields=["worker_role"])
+    return user
 
 
 def image_bytes(*, image_format: str, size: tuple[int, int] = (32, 32)) -> bytes:

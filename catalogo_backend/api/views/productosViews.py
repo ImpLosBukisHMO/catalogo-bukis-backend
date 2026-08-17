@@ -1,10 +1,43 @@
 from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly
 from rest_framework.exceptions import ValidationError
-from api.models import ProductosModel
+from django.db.models import Prefetch, Q, Sum
+
+from api.models import ProductoVariantesModel, ProductosImagenesModel, ProductosModel
 from api.pagination import PublicCatalogPagination
 from api.serializers import ProductosSerializer, ProductoDetalleSerializer
-from django.db.models import Q
+
+
+def _with_public_image_prefetch(queryset):
+    return queryset.select_related(
+        "categoria__descuento_general",
+        "descuento_especial",
+    ).prefetch_related(
+        Prefetch(
+            "producto_colores",
+            queryset=(
+                ProductoVariantesModel.objects.filter(activo=True)
+                .select_related("producto")
+                .prefetch_related(
+                    Prefetch(
+                        "imagenes",
+                        queryset=ProductosImagenesModel.objects.order_by("orden", "id"),
+                        to_attr="_cached_variante_imagenes",
+                    )
+                )
+                .order_by("color__nombre", "id")
+            ),
+            to_attr="_cached_display_variantes",
+        ),
+        Prefetch(
+            "imagenes",
+            queryset=(
+                ProductosImagenesModel.objects.filter(variante__isnull=True)
+                .order_by("orden", "id")
+            ),
+            to_attr="_cached_prod_imagenes",
+        ),
+    )
 
 
 class ProductosListCreate(generics.ListCreateAPIView):
@@ -32,14 +65,13 @@ class ProductosListCreate(generics.ListCreateAPIView):
         raise ValidationError({field_name: "Debe ser booleano (true/false)."})
 
     def get_queryset(self):
-        qs = (
+        qs = _with_public_image_prefetch(
             ProductosModel.objects
             .filter(
                 disponible=True,
                 estado=ProductosModel.EstadoProducto.ACTIVE,
             )
             .order_by("-id")
-            .prefetch_related("producto_colores", "producto_colores__color")
         )
 
         categoria_id = self.request.query_params.get("categoria_id")
@@ -93,9 +125,11 @@ class ProductosRetrieveUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
     http_method_names = ["get", "head", "options"]
 
     def get_queryset(self):
-        return ProductosModel.objects.filter(
-            disponible=True,
-            estado=ProductosModel.EstadoProducto.ACTIVE,
+        return _with_public_image_prefetch(
+            ProductosModel.objects.filter(
+                disponible=True,
+                estado=ProductosModel.EstadoProducto.ACTIVE,
+            )
         )
 
     def get_serializer_class(self):
@@ -104,7 +138,6 @@ class ProductosRetrieveUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from django.db.models import Sum
 
 class ProductosNovedadesList(generics.ListAPIView):
     serializer_class = ProductosSerializer
@@ -112,10 +145,12 @@ class ProductosNovedadesList(generics.ListAPIView):
     pagination_class = None
 
     def get_queryset(self):
-        return ProductosModel.objects.filter(
-            disponible=True,
-            estado=ProductosModel.EstadoProducto.ACTIVE,
-        ).order_by("-created_at")[:10]
+        return _with_public_image_prefetch(
+            ProductosModel.objects.filter(
+                disponible=True,
+                estado=ProductosModel.EstadoProducto.ACTIVE,
+            ).order_by("-created_at")[:10]
+        )
 
 
 class ProductosMasVistosList(generics.ListAPIView):
@@ -124,10 +159,12 @@ class ProductosMasVistosList(generics.ListAPIView):
     pagination_class = None
 
     def get_queryset(self):
-        return ProductosModel.objects.filter(
-            disponible=True,
-            estado=ProductosModel.EstadoProducto.ACTIVE,
-        ).order_by("-vistas")[:10]
+        return _with_public_image_prefetch(
+            ProductosModel.objects.filter(
+                disponible=True,
+                estado=ProductosModel.EstadoProducto.ACTIVE,
+            ).order_by("-vistas")[:10]
+        )
 
 
 class ProductosMenosVistosList(generics.ListAPIView):
@@ -136,10 +173,12 @@ class ProductosMenosVistosList(generics.ListAPIView):
     pagination_class = None
 
     def get_queryset(self):
-        return ProductosModel.objects.filter(
-            disponible=True,
-            estado=ProductosModel.EstadoProducto.ACTIVE,
-        ).order_by("vistas")[:10]
+        return _with_public_image_prefetch(
+            ProductosModel.objects.filter(
+                disponible=True,
+                estado=ProductosModel.EstadoProducto.ACTIVE,
+            ).order_by("vistas")[:10]
+        )
 
 
 class ProductosMasVendidosList(generics.ListAPIView):
@@ -151,12 +190,14 @@ class ProductosMasVendidosList(generics.ListAPIView):
         # Annotate each product with the sum of quantities from related order items
         # where the order is not canceled.
         from api.models import PedidosModel
-        return ProductosModel.objects.filter(
-            disponible=True,
-            estado=ProductosModel.EstadoProducto.ACTIVE,
-        ).annotate(
-            total_vendidos=Sum('producto_colores__pedido_items__cantidad', filter=~Q(producto_colores__pedido_items__pedido__estado=PedidosModel.EstadoPedido.CANCELADO))
-        ).order_by("-total_vendidos")[:10]
+        return _with_public_image_prefetch(
+            ProductosModel.objects.filter(
+                disponible=True,
+                estado=ProductosModel.EstadoProducto.ACTIVE,
+            ).annotate(
+                total_vendidos=Sum('producto_colores__pedido_items__cantidad', filter=~Q(producto_colores__pedido_items__pedido__estado=PedidosModel.EstadoPedido.CANCELADO))
+            ).order_by("-total_vendidos")[:10]
+        )
 
 
 class ProductosMenosVendidosList(generics.ListAPIView):
@@ -168,12 +209,14 @@ class ProductosMenosVendidosList(generics.ListAPIView):
         # Annotate each product with the sum of quantities from related order items
         # where the order is not canceled.
         from api.models import PedidosModel
-        return ProductosModel.objects.filter(
-            disponible=True,
-            estado=ProductosModel.EstadoProducto.ACTIVE,
-        ).annotate(
-            total_vendidos=Sum('producto_colores__pedido_items__cantidad', filter=~Q(producto_colores__pedido_items__pedido__estado=PedidosModel.EstadoPedido.CANCELADO))
-        ).order_by("total_vendidos")[:10]
+        return _with_public_image_prefetch(
+            ProductosModel.objects.filter(
+                disponible=True,
+                estado=ProductosModel.EstadoProducto.ACTIVE,
+            ).annotate(
+                total_vendidos=Sum('producto_colores__pedido_items__cantidad', filter=~Q(producto_colores__pedido_items__pedido__estado=PedidosModel.EstadoPedido.CANCELADO))
+            ).order_by("total_vendidos")[:10]
+        )
 
 
 class ReportarVistaProducto(APIView):

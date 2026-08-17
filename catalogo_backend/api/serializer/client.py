@@ -19,6 +19,22 @@ class MeSerializer(serializers.ModelSerializer):
             "is_admin",
             "is_staff",
             "is_superuser",
+            "worker_role",
+            "can_add_products",
+            "can_edit_products",
+            "can_edit_prices",
+            "can_manage_discount_codes",
+            "can_apply_discounts",
+            "can_manage_offers",
+        ]
+        read_only_fields = [
+            "worker_role",
+            "can_add_products",
+            "can_edit_products",
+            "can_edit_prices",
+            "can_manage_discount_codes",
+            "can_apply_discounts",
+            "can_manage_offers",
         ]
 
 

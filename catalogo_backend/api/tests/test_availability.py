@@ -7,7 +7,7 @@ from api.models import ColorModel, ProductoVariantesModel, ProductosModel, Usuar
 
 
 def _create_user(email: str, staff: bool = False) -> UsuariosModel:
-    return UsuariosModel.objects.create_user(
+    user = UsuariosModel.objects.create_user(
         nombre="Test",
         apellido="User",
         correo=email,
@@ -15,6 +15,10 @@ def _create_user(email: str, staff: bool = False) -> UsuariosModel:
         password="testpass123",
         staff=staff,
     )
+    if staff:
+        user.worker_role = UsuariosModel.WorkerRole.TOTAL
+        user.save(update_fields=["worker_role"])
+    return user
 
 
 def _create_product(
