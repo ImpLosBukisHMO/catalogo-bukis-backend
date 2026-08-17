@@ -47,9 +47,7 @@ from api.serializer.worker import (
 from api.utils.comprobantes import build_comprobante_response
 from api.utils.recibos import (
     RECIBO_ALLOWED_STATES,
-    build_recibo_pdf_response,
-    render_recibo_html,
-    render_recibo_pdf_bytes,
+    build_recibo_response_for_pedido,
 )
 from django.shortcuts import get_object_or_404
 
@@ -201,9 +199,7 @@ class WorkerPedidoReciboPdfView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        html = render_recibo_html(pedido)
-        pdf_bytes = render_recibo_pdf_bytes(html)
-        return build_recibo_pdf_response(pdf_bytes, pedido.folio)
+        return build_recibo_response_for_pedido(pedido)
 
 
 # =========================

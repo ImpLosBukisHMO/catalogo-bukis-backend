@@ -17,9 +17,7 @@ from api.utils.comprobantes import build_comprobante_response
 from api.utils.emails import send_comprobante_pago_worker_email
 from api.utils.recibos import (
     RECIBO_ALLOWED_STATES,
-    build_recibo_pdf_response,
-    render_recibo_html,
-    render_recibo_pdf_bytes,
+    build_recibo_response_for_pedido,
 )
 # pyrefly: ignore [missing-import]
 from api.permissions import IsWorker
@@ -277,7 +275,7 @@ class MiPedidoReciboPdfView(generics.GenericAPIView):
             return None
 
     def get(self, request, id, *args, **kwargs):
-        if getattr(request.user, "worker_role", "none") in ("total", "parcial"):
+        if request.user.is_staff:
             return Response(
                 {"error": "No tienes permiso para ver este pedido."},
                 status=status.HTTP_403_FORBIDDEN,
@@ -293,6 +291,4 @@ class MiPedidoReciboPdfView(generics.GenericAPIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        html = render_recibo_html(pedido)
-        pdf_bytes = render_recibo_pdf_bytes(html)
-        return build_recibo_pdf_response(pdf_bytes, pedido.folio)
+        return build_recibo_response_for_pedido(pedido)

@@ -49,3 +49,9 @@ def build_recibo_pdf_response(pdf_bytes: bytes, folio: str) -> HttpResponse:
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = f'inline; filename="recibo-{folio}.pdf"'
     return response
+
+
+def build_recibo_response_for_pedido(pedido) -> HttpResponse:
+    html = render_recibo_html(pedido)
+    pdf_bytes = render_recibo_pdf_bytes(html)
+    return build_recibo_pdf_response(pdf_bytes, pedido.folio)
