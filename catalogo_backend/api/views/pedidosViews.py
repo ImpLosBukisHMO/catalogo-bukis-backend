@@ -15,6 +15,12 @@ from api.serializer.client import MiPedidoComprobanteUpdateSerializer
 from api.models import PedidosModel, PedidoProductosModel
 from api.utils.comprobantes import build_comprobante_response
 from api.utils.emails import send_comprobante_pago_worker_email
+from api.utils.recibos import (
+    RECIBO_ALLOWED_STATES,
+    build_recibo_pdf_response,
+    render_recibo_html,
+    render_recibo_pdf_bytes,
+)
 # pyrefly: ignore [missing-import]
 from api.permissions import IsWorker
 
@@ -251,3 +257,42 @@ class MiPedidoComprobanteUpdateView(generics.GenericAPIView):
 
         pedido.refresh_from_db()
         return Response(ClientePedidoSerializer(pedido).data, status=status.HTTP_200_OK)
+
+
+class MiPedidoReciboPdfView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
+    lookup_field = "id"
+
+    @staticmethod
+    def _get_pedido(*, id, user):
+        try:
+            return (
+                PedidosModel.objects
+                .filter(cliente=user)
+                .select_related("cliente", "direccion")
+                .prefetch_related("items")
+                .get(pk=id)
+            )
+        except PedidosModel.DoesNotExist:
+            return None
+
+    def get(self, request, id, *args, **kwargs):
+        if getattr(request.user, "worker_role", "none") in ("total", "parcial"):
+            return Response(
+                {"error": "No tienes permiso para ver este pedido."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        pedido = self._get_pedido(id=id, user=request.user)
+        if pedido is None:
+            return Response({"error": "Pedido no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        if pedido.estado not in RECIBO_ALLOWED_STATES:
+            return Response(
+                {"error": "El recibo no está disponible para el estado actual del pedido."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        html = render_recibo_html(pedido)
+        pdf_bytes = render_recibo_pdf_bytes(html)
+        return build_recibo_pdf_response(pdf_bytes, pedido.folio)
