@@ -29,7 +29,7 @@ def _create_product(worker: UsuariosModel, nombre: str = "Producto Barcode") -> 
         imagen="img/products/default.jpg",
         descripcion="desc",
         precio=Decimal("100.00"),
-        peso=Decimal("1.00"),
+        peso="1.00",
         medidas="10x10x10",
         disponible=True,
         worker=worker,
@@ -133,7 +133,7 @@ class BarcodeMigrationGraphTest(TestCase):
         loader = MigrationLoader(connection, ignore_no_migrations=True)
         api_leaves = [node for node in loader.graph.leaf_nodes() if node[0] == "api"]
 
-        self.assertEqual(api_leaves, [("api", "0039_merge_20260816_2318")])
+        self.assertEqual(api_leaves, [("api", "0040_merge_20260817_1507")])
 
     def test_only_one_0022_api_migration_file_exists(self):
         migrations_dir = Path(__file__).resolve().parents[1] / "migrations"
