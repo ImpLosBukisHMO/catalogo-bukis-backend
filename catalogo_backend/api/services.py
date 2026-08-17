@@ -107,13 +107,7 @@ def _send_confirmation_email_bg(usuario_id: int, nombre: str, correo: str, codig
 
 def enviar_correo_confirmacion(usuario: UsuariosModel):
     codigo = generar_codigo_confirmacion(usuario)
-    # Envío en segundo plano: la petición HTTP retorna de inmediato sin esperar al SMTP.
-    t = threading.Thread(
-        target=_send_confirmation_email_bg,
-        args=(usuario.id, usuario.nombre, usuario.correo, codigo),
-        daemon=True,
-    )
-    t.start()
+    _send_confirmation_email_bg(usuario.id, usuario.nombre, usuario.correo, codigo)
     return True, "Correo enviado"
 
 
@@ -152,7 +146,7 @@ def reenviar_correo_confirmacion(correo: str):
     if not exito:
         return False, f"No se pudo enviar el correo por problemas en el servidor: {msg}"
         
-    return True, f"Se ha reenviado el correo de confirmación exitosamente. En caso de que el correo haya llegado a la sección de SPAM, verifique que el remitente sea \"{settings.EMAIL_HOST_USER}\"."
+    return True, f"Se ha reenviado el correo de confirmación exitosamente. En caso de que el correo haya llegado a la sección de SPAM, verifique que el remitente sea \"{settings.DEFAULT_FROM_EMAIL}\"."
 
 
 def _send_recovery_email_bg(usuario_id: int, nombre: str, correo: str, codigo: str):
@@ -187,13 +181,7 @@ def _send_recovery_email_bg(usuario_id: int, nombre: str, correo: str, codigo: s
 
 def enviar_correo_recuperacion(usuario: UsuariosModel):
     codigo = generar_codigo_confirmacion(usuario)
-    # Envío en segundo plano: la petición HTTP retorna de inmediato sin esperar al SMTP.
-    t = threading.Thread(
-        target=_send_recovery_email_bg,
-        args=(usuario.id, usuario.nombre, usuario.correo, codigo),
-        daemon=True,
-    )
-    t.start()
+    _send_recovery_email_bg(usuario.id, usuario.nombre, usuario.correo, codigo)
     return True, "Correo de recuperación enviado"
 
 
@@ -217,7 +205,7 @@ def restablecer_password(correo: str, codigo: str, nueva_password: str):
         return False, " ".join(list(e.messages))
         
     usuario.set_password(nueva_password)
-    usuario.is_email_verified = True # Por si recuperan contraseña sin haber verificado cuenta antes
+    usuario.is_email_verified = True
     usuario.verification_code = None
     usuario.verification_code_expires = None
     usuario.save(update_fields=["password", "is_email_verified", "verification_code", "verification_code_expires"])

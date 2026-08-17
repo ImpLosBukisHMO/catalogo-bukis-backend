@@ -16,8 +16,8 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dev-only-change-in-pr
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
-
 CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',') if os.environ.get('CSRF_TRUSTED_ORIGINS') else []
+
 if FRONTEND_URL and FRONTEND_URL not in CSRF_TRUSTED_ORIGINS:
     CSRF_TRUSTED_ORIGINS.append(FRONTEND_URL)
 if DEBUG:
@@ -32,23 +32,16 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-
     "django.contrib.postgres",
     "rest_framework",
-
-    # CORS
     "corsheaders",
-
     "api",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
-
-    # CORS middleware debe ir antes de CommonMiddleware
     "corsheaders.middleware.CorsMiddleware",
-
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -100,23 +93,17 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-
-# Media — en prod apunta al mount path del Railway Volume (MEDIA_ROOT env var)
 MEDIA_URL = "/media/"
 MEDIA_ROOT = Path(os.environ.get('MEDIA_ROOT', BASE_DIR / "media"))
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        # Uso de cookies HttpOnly con fallback a Bearer para compatibilidad
         "api.authentication.JWTCookieAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.AllowAny",
     ),
     "DEFAULT_THROTTLE_RATES": {
-        # Defensa en profundidad contra fuerza bruta en el login:
-        # login_ip: bloquea por IP (misma red, distintos usuarios).
-        # login_account: bloquea por cuenta (distintas IPs, mismo usuario objetivo).
         "login_ip": "5/minute",
         "login_account": "10/minute",
     }
@@ -124,19 +111,11 @@ REST_FRAMEWORK = {
 
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 AUTH_USER_MODEL = "api.UsuariosModel"
-
-# Número de proxies delante del servidor de Django (ej. Railway, Nginx).
-# Permite que DRF lea la IP real del cliente desde X-Forwarded-For
-# en lugar de la IP del proxy, lo que evita bloquear a todos los usuarios
-# con el mismo throttle de IP.
 NUM_PROXIES = int(os.environ.get('NUM_PROXIES', 1))
-
-CORS_ALLOW_ALL_ORIGINS = DEBUG  # Only allow all in development
+CORS_ALLOW_ALL_ORIGINS = DEBUG
 CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',') if not DEBUG else []
 CORS_ALLOW_CREDENTIALS = True
 CORS_EXPOSE_HEADERS = ['X-CSRFToken']
-
-# Configuración de cookies para entornos Cross-Origin (Frontend y Backend en dominios distintos)
 CSRF_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
 CSRF_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
@@ -184,9 +163,6 @@ def cookie_security_kwargs():
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Email — Mailtrap en desarrollo, SMTP real en producción
-# En desarrollo: los correos son interceptados por Mailtrap (nunca llegan a buzones reales).
-# En producción: usar un ESP real (SendGrid, Resend, etc.) con SPF/DKIM configurados en el dominio.
 if DEBUG:
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
     EMAIL_HOST     = os.getenv('EMAIL_HOST', 'sandbox.smtp.mailtrap.io')
@@ -196,16 +172,16 @@ if DEBUG:
     EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 else:
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-    EMAIL_HOST     = os.getenv('EMAIL_HOST')          # Ej. smtp.resend.com / smtp.sendgrid.net
+    EMAIL_HOST     = os.getenv('EMAIL_HOST')
     EMAIL_PORT     = int(os.getenv('EMAIL_PORT', 587))
     EMAIL_USE_TLS  = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
     EMAIL_HOST_USER     = os.getenv('EMAIL_HOST_USER')
     EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
-    EMAIL_TIMEOUT  = 5
+    EMAIL_TIMEOUT  = 15
 
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', f'Importaciones Los Bukis <{EMAIL_HOST_USER}>')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Importaciones Los Bukis <notificaciones@noreply.importacioneslosbukis.com>')
 
-# Other private data
+# Other data
 BANK_ACCOUNT_NAME = os.getenv('BANK_ACCOUNT_NAME', '')
 BANK_ACCOUNT_REF = os.getenv('BANK_ACCOUNT_REF', '')
 BANK_NAME = os.getenv('BANK_NAME', '')
