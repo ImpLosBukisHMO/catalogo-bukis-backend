@@ -62,7 +62,7 @@ class Command(BaseCommand):
 
         self.stdout.write("\n=== Asociando productos a categorías ===")
 
-        productos = ProductosModel.objects.prefetch_related("categorias").all()
+        productos = ProductosModel.objects.select_related("categoria").all()
 
         for producto in productos:
             nombre_lower = producto.nombre.lower()
@@ -75,11 +75,12 @@ class Command(BaseCommand):
                         categorias_a_agregar.append(cat)
 
             if categorias_a_agregar:
-                for cat in categorias_a_agregar:
-                    producto.categorias.add(cat)
-                nombres = [c.nombre for c in categorias_a_agregar]
+                # Asignamos la primera categoría encontrada (relación ForeignKey)
+                cat = categorias_a_agregar[0]
+                producto.categoria = cat
+                producto.save()
                 self.stdout.write(
-                    f'  "{producto.nombre}" → {nombres}'
+                    f'  "{producto.nombre}" → {cat.nombre}'
                 )
             else:
                 self.stdout.write(

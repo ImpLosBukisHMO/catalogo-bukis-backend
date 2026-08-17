@@ -19,7 +19,7 @@ class CategoriasListCreate(generics.ListCreateAPIView):
         serializer = CategoriasSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return Response({'mensaje':'Categoría creada existosamente.', 'datos': request.data}, status=status.HTTP_201_CREATED)
+            return Response({'mensaje':'Categoría creada existosamente.', 'datos': serializer.data}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def get(self, request, *args, **kwargs):
