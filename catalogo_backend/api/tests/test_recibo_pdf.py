@@ -95,7 +95,7 @@ class ReciboPdfViewTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response["Content-Type"], "application/pdf")
-        self.assertIn('inline; filename="recibo-000001.pdf"', response["Content-Disposition"])
+        self.assertIn(f'inline; filename="recibo-{pedido.folio}.pdf"', response["Content-Disposition"])
         self.assertTrue(response.content.startswith(b"%PDF"))
 
     def test_owner_pending_order_returns_409(self):
@@ -168,7 +168,7 @@ class ReciboPdfViewTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response["Content-Type"], "application/pdf")
-        self.assertIn('filename="recibo-000001.pdf"', response["Content-Disposition"])
+        self.assertIn(f'filename="recibo-{pedido.folio}.pdf"', response["Content-Disposition"])
         self.assertTrue(response.content.startswith(b"%PDF"))
 
     def test_worker_parcial_can_download_shipped_order(self):
