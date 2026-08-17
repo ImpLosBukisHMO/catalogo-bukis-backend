@@ -194,3 +194,107 @@ class WorkerCambiarEstadoEmailEscapingTest(TestCase):
         self.assertIn('&lt;b&gt;nota&lt;/b&gt;', mail_body)
         self.assertNotIn('<script>alert("x")</script>', mail_body)
         self.assertNotIn('<b>nota</b>', mail_body)
+
+
+# =============================================================================
+# Tests: requiere_reembolso y reapertura de pedidos
+# =============================================================================
+
+class ReembolsoYReaperturaTests(TestCase):
+    """
+    Verifica la lógica de negocio de requiere_reembolso al cancelar,
+    y la limpieza de campos al reabrir un pedido (CANCELED → PENDING).
+    """
+
+    def setUp(self):
+        self.worker = UsuariosModel.objects.create_user(
+            nombre="Worker",
+            apellido="Reembolso",
+            correo="worker_reembolso@test.com",
+            telefono="555-0000001",
+            password="testpass123",
+            staff=True,
+        )
+        self.cliente = UsuariosModel.objects.create_user(
+            nombre="Cliente",
+            apellido="Reembolso",
+            correo="cliente_reembolso@test.com",
+            telefono="555-1234567",
+            password="testpass123",
+            staff=False,
+        )
+        self.api = APIClient()
+        self.api.force_authenticate(user=self.worker)
+
+    def _create_pedido(self, estado, comprobante="", **kwargs):
+        return PedidosModel.objects.create(
+            cliente=self.cliente,
+            estado=estado,
+            precio_total=100.00,
+            subtotal_snapshot=90.00,
+            comprobante_pago=comprobante,
+            **kwargs,
+        )
+
+    def _cambiar_estado(self, pedido_id, payload):
+        url = reverse("worker-cambiar-estado", kwargs={"pedido_id": pedido_id})
+        with patch("api.views.workerViews.threading.Thread"):
+            with self.captureOnCommitCallbacks(execute=True):
+                return self.api.patch(url, data=payload, content_type="application/json")
+
+    def test_cancelar_pedido_con_comprobante_marca_requiere_reembolso(self):
+        """Si se cancela un pedido que ya tiene comprobante, requiere_reembolso = True."""
+        pedido = self._create_pedido(
+            PedidosModel.EstadoPedido.APROBADO,
+            comprobante="comprobantes/test.pdf",
+        )
+        res = self._cambiar_estado(pedido.id, {
+            "estado": "CANCELED",
+            "denegado_razon": "Producto no disponible",
+        })
+        self.assertEqual(res.status_code, 200, res.content)
+
+        pedido.refresh_from_db()
+        self.assertTrue(pedido.requiere_reembolso)
+
+    def test_cancelar_pedido_sin_comprobante_no_marca_reembolso(self):
+        """Si se cancela un pedido SIN comprobante, requiere_reembolso queda False."""
+        pedido = self._create_pedido(PedidosModel.EstadoPedido.APROBADO)
+        res = self._cambiar_estado(pedido.id, {
+            "estado": "CANCELED",
+            "denegado_razon": "Cliente lo solicitó",
+        })
+        self.assertEqual(res.status_code, 200, res.content)
+
+        pedido.refresh_from_db()
+        self.assertFalse(pedido.requiere_reembolso)
+
+    def test_reabrir_pedido_limpia_campos_residuales(self):
+        """Al reabrir (CANCELED → PENDING), se limpian razón, nota, comprobante."""
+        pedido = self._create_pedido(
+            PedidosModel.EstadoPedido.CANCELADO,
+            comprobante="comprobantes/old.pdf",
+            denegado_razon="Fue cancelado por X",
+            nota_worker="Nota del ciclo anterior",
+            requiere_reembolso=True,
+        )
+        res = self._cambiar_estado(pedido.id, {"estado": "PENDING"})
+        self.assertEqual(res.status_code, 200, res.content)
+
+        pedido.refresh_from_db()
+        self.assertIsNone(pedido.denegado_razon)
+        self.assertFalse(pedido.requiere_reembolso)
+        self.assertFalse(bool(pedido.comprobante_pago))
+
+    def test_reabrir_pedido_resetea_requiere_reembolso(self):
+        """Al reabrir, requiere_reembolso debe quedar False."""
+        pedido = self._create_pedido(
+            PedidosModel.EstadoPedido.CANCELADO,
+            requiere_reembolso=True,
+            denegado_razon="Cancelado por error",
+        )
+        res = self._cambiar_estado(pedido.id, {"estado": "PENDING"})
+        self.assertEqual(res.status_code, 200, res.content)
+
+        pedido.refresh_from_db()
+        self.assertFalse(pedido.requiere_reembolso)

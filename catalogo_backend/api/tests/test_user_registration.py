@@ -117,16 +117,57 @@ class RegistroTests(TestCase):
 
     def test_registro_sin_password_retorna_error(self):
         """
-        El serializer define password como write_only y required=False,
-        por lo que actualmente se puede registrar sin contraseña (el campo queda
-        sin establecer). Este test documenta ese comportamiento.
-        Si en el futuro se requiere password obligatoriamente en el serializer,
-        cambiar el assert a assertEqual(res.status_code, 400).
+        El password es obligatorio, se debe devolver 400 si no se incluye.
         """
         payload = {k: v for k, v in VALID_PAYLOAD.items() if k != "password"}
         res = self.client.post(SIGNUP_URL, payload, format="json")
-        # Actualmente el serializer permite omitir el password → 201
-        self.assertIn(res.status_code, [201, 400])
+        self.assertEqual(res.status_code, 400)
+
+
+# =============================================================================
+# 1.5. Validación de contraseñas (complejidad)
+# =============================================================================
+
+class PasswordValidationTests(TestCase):
+
+    def setUp(self):
+        self.client = APIClient()
+
+    _counter = 0
+
+    def _intentar_registro_con_password(self, password):
+        PasswordValidationTests._counter += 1
+        payload = {**VALID_PAYLOAD, "correo": f"pwtest{self._counter}@test.com", "password": password}
+        return self.client.post(SIGNUP_URL, payload, format="json")
+
+    def test_registro_con_password_sin_mayuscula_retorna_400(self):
+        res = self._intentar_registro_con_password("mipassword1!")
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("password", res.data)
+
+    def test_registro_con_password_sin_minuscula_retorna_400(self):
+        res = self._intentar_registro_con_password("MIPASSWORD1!")
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("password", res.data)
+
+    def test_registro_con_password_sin_numero_retorna_400(self):
+        res = self._intentar_registro_con_password("MiPassword!")
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("password", res.data)
+
+    def test_registro_con_password_sin_especial_retorna_400(self):
+        res = self._intentar_registro_con_password("MiPassword1")
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("password", res.data)
+
+    def test_registro_con_password_corta_retorna_400(self):
+        res = self._intentar_registro_con_password("MiP1!")
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("password", res.data)
+
+    def test_registro_con_password_valida_compleja_retorna_201(self):
+        res = self._intentar_registro_con_password("SuperSegura1@")
+        self.assertEqual(res.status_code, 201)
 
 
 # =============================================================================
@@ -141,6 +182,8 @@ class LoginSinVerificarTests(TestCase):
         # de la suite disparan 429 en tests posteriores (flaky en CI).
         cache.clear()
         self.client = APIClient()
+        from django.core.cache import cache
+        cache.clear()
 
     def test_login_sin_verificar_retorna_401(self):
         """Un usuario sin verificar no puede iniciar sesión."""
