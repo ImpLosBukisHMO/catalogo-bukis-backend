@@ -35,6 +35,10 @@ INSTALLED_APPS = [
     "django.contrib.postgres",
     "rest_framework",
     "corsheaders",
+    
+    # Manejo de correos vía API REST (para saltar bloqueos SMTP de nube)
+    "anymail",
+
     "api",
 ]
 
@@ -131,13 +135,14 @@ if DEBUG:
     EMAIL_HOST_USER     = os.getenv('EMAIL_HOST_USER', '')
     EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 else:
-    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-    EMAIL_HOST     = os.getenv('EMAIL_HOST')
-    EMAIL_PORT     = int(os.getenv('EMAIL_PORT', 587))
-    EMAIL_USE_TLS  = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
-    EMAIL_HOST_USER     = os.getenv('EMAIL_HOST_USER')
-    EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
-    EMAIL_TIMEOUT  = 15
+    # Usamos Anymail (REST API) en lugar de SMTP para evadir el firewall de Railway
+    EMAIL_BACKEND = 'anymail.backends.resend.EmailBackend'
+    ANYMAIL = {
+        # Resend API Key (Toma la misma contraseña que usabas para SMTP)
+        "RESEND_API_KEY": os.getenv('RESEND_API_KEY') or os.getenv('EMAIL_HOST_PASSWORD')
+    }
+    # Mantener DEFAULT_FROM_EMAIL aquí
+    EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', 'resend')
 
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Importaciones Los Bukis <notificaciones@noreply.importacioneslosbukis.com>')
 
