@@ -12,6 +12,7 @@ import uuid
 import os
 # pyrefly: ignore [missing-import]
 from django.utils import timezone
+from .fields import EncryptedCharField
 
 hex_color_validator = RegexValidator(
     regex=r"^#[0-9A-Fa-f]{6}$",
@@ -99,10 +100,10 @@ class AdministradorDeUsuarios(BaseUserManager):
 # Usuarios (cliente, admin).
 class UsuariosModel(AbstractUser):
     username = None
-    nombre = models.CharField(max_length=100, null=False, default="", verbose_name="Nombre(s)")
-    apellido = models.CharField(max_length=100, null=False, default="", verbose_name="Apellido(s)")
+    nombre = EncryptedCharField(max_length=100, null=False, default="", verbose_name="Nombre(s)")
+    apellido = EncryptedCharField(max_length=100, null=False, default="", verbose_name="Apellido(s)")
     correo = models.EmailField(unique=True, verbose_name="Correo electrónico")
-    telefono = models.CharField(max_length=30, null=False, verbose_name="Teléfono")
+    telefono = EncryptedCharField(max_length=30, null=False, verbose_name="Teléfono")
     password = models.CharField(max_length=255, null=False, blank=True, verbose_name="Contraseña")
 
     is_email_verified = models.BooleanField(default=False)
@@ -428,12 +429,12 @@ class ProductosFavoritosModel(models.Model):
 # Direcciones de los usuarios.
 class DireccionesModel(models.Model):
     usuario = models.ForeignKey(UsuariosModel, on_delete=models.CASCADE)
-    calle = models.CharField(max_length=100, null=False)
-    colonia = models.CharField(max_length=100, null=False)
-    codigo_postal = models.CharField(max_length=50, null=False)
-    ciudad = models.CharField(max_length=50, null=False)
-    estado = models.CharField(max_length=50, null=False)
-    pais = models.CharField(max_length=50, null=False)
+    calle = EncryptedCharField(max_length=100, null=False)
+    colonia = EncryptedCharField(max_length=100, null=False)
+    codigo_postal = EncryptedCharField(max_length=50, null=False)
+    ciudad = EncryptedCharField(max_length=50, null=False)
+    estado = EncryptedCharField(max_length=50, null=False)
+    pais = EncryptedCharField(max_length=50, null=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

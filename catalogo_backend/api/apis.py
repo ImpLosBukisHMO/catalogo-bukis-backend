@@ -12,6 +12,10 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework.exceptions import ValidationError as DRFValidationError
 # pyrefly: ignore [missing-import]
 from .throttles import LoginByIpThrottle, LoginByAccountThrottle
+from django.conf import settings
+
+cookie_kwargs = {'samesite': 'None', 'secure': True} if not settings.DEBUG else {'samesite': 'Lax'}
+
 
 
 # Registrarse.
@@ -72,8 +76,8 @@ class APIIniciarSesion(views.APIView):
         
         refresh = RefreshToken.for_user(usuario)
         res = response.Response({"mensaje": "Autenticación exitosa"})
-        res.set_cookie(key='access_token', value=str(refresh.access_token), httponly=True, samesite='Lax')
-        res.set_cookie(key='refresh_token', value=str(refresh), httponly=True, samesite='Lax')
+        res.set_cookie(key='access_token', value=str(refresh.access_token), httponly=True, **cookie_kwargs)
+        res.set_cookie(key='refresh_token', value=str(refresh), httponly=True, **cookie_kwargs)
         
         from django.middleware.csrf import get_token
         get_token(request) # Ensure CSRF token is sent
@@ -166,13 +170,14 @@ class APICerrarSesion(views.APIView):
 
     def post(self, request):
         res = response.Response({'mensaje': 'La sesión se cerró exitosamente.'})
-        res.set_cookie(key='access_token', value='', max_age=0, path='/', httponly=True, samesite='Lax')
-        res.set_cookie(key='refresh_token', value='', max_age=0, path='/', httponly=True, samesite='Lax')
-        res.set_cookie(key='jwt', value='', max_age=0, path='/', httponly=True, samesite='Lax')
-        res.delete_cookie(key='access_token', path='/', samesite='Lax')
-        res.delete_cookie(key='refresh_token', path='/', samesite='Lax')
-        res.delete_cookie(key='jwt', path='/', samesite='Lax')
-        res.delete_cookie(key='csrftoken', path='/', samesite='Lax')
+        res.set_cookie(key='access_token', value='', max_age=0, path='/', httponly=True, **cookie_kwargs)
+        res.set_cookie(key='refresh_token', value='', max_age=0, path='/', httponly=True, **cookie_kwargs)
+        res.set_cookie(key='jwt', value='', max_age=0, path='/', httponly=True, **cookie_kwargs)
+        samesite_kwarg = cookie_kwargs.get('samesite', 'Lax')
+        res.delete_cookie(key='access_token', path='/', samesite=samesite_kwarg)
+        res.delete_cookie(key='refresh_token', path='/', samesite=samesite_kwarg)
+        res.delete_cookie(key='jwt', path='/', samesite=samesite_kwarg)
+        res.delete_cookie(key='csrftoken', path='/', samesite=samesite_kwarg)
         return res
         
         
@@ -196,8 +201,8 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
             access_token = res.data.get('access')
             refresh_token = res.data.get('refresh')
-            res.set_cookie(key='access_token', value=access_token, httponly=True, samesite='Lax')
-            res.set_cookie(key='refresh_token', value=refresh_token, httponly=True, samesite='Lax')
+            res.set_cookie(key='access_token', value=access_token, httponly=True, **cookie_kwargs)
+            res.set_cookie(key='refresh_token', value=refresh_token, httponly=True, **cookie_kwargs)
             
             from django.middleware.csrf import get_token
             get_token(request) # Ensure CSRF token is sent
@@ -226,7 +231,7 @@ class CookieTokenRefreshView(TokenRefreshView):
         res = super().post(request, *args, **kwargs)
         if res.status_code == 200:
             access_token = res.data.get('access')
-            res.set_cookie(key='access_token', value=access_token, httponly=True, samesite='Lax')
+            res.set_cookie(key='access_token', value=access_token, httponly=True, **cookie_kwargs)
             if 'refresh' in res.data:
-                res.set_cookie(key='refresh_token', value=res.data['refresh'], httponly=True, samesite='Lax')
+                res.set_cookie(key='refresh_token', value=res.data['refresh'], httponly=True, **cookie_kwargs)
         return res
