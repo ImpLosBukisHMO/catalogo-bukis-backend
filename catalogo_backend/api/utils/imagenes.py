@@ -22,60 +22,155 @@ if TYPE_CHECKING:
     from api.models import ProductoVariantesModel
 
 
-def _url(img_field) -> str | None:
+def _get_exists_cache(owner) -> dict[tuple[int, str], bool]:
+    cache = getattr(owner, "_cached_image_exists", None)
+    if cache is None:
+        cache = {}
+        setattr(owner, "_cached_image_exists", cache)
+    return cache
+
+
+def _file_exists(img_field, *, exists_cache: dict[tuple[int, str], bool] | None = None) -> bool:
     if not img_field:
+        return False
+
+    name = getattr(img_field, "name", None) or str(img_field) or None
+    storage = getattr(img_field, "storage", None)
+    if not name or storage is None:
+        return False
+
+    cache_key = (id(storage), name)
+    if exists_cache is not None and cache_key in exists_cache:
+        return exists_cache[cache_key]
+
+    exists = storage.exists(name)
+    if exists_cache is not None:
+        exists_cache[cache_key] = exists
+    return exists
+
+
+def _url(img_field, *, exists_cache: dict[tuple[int, str], bool] | None = None) -> str | None:
+    if not _file_exists(img_field, exists_cache=exists_cache):
         return None
     return img_field.url if hasattr(img_field, "url") else (str(img_field) or None)
 
 
-def get_variante_imagen(variante: "ProductoVariantesModel") -> str | None:
+def _first_existing_image(
+    image_rows,
+    *,
+    principal_only: bool = False,
+    exists_cache: dict[tuple[int, str], bool] | None = None,
+):
+    for image in image_rows:
+        if principal_only and not image.es_principal:
+            continue
+        if _file_exists(image.imagen, exists_cache=exists_cache):
+            return image
+    return None
+
+
+def get_existing_product_images(
+    image_rows,
+    *,
+    exists_cache: dict[tuple[int, str], bool] | None = None,
+):
+    return [image for image in image_rows if _file_exists(image.imagen, exists_cache=exists_cache)]
+
+
+def _pick_best_image_candidate(image_rows):
+    principal = None
+    fallback = None
+
+    for image in image_rows:
+        if fallback is None:
+            fallback = image
+        if principal is None and image.es_principal:
+            principal = image
+
+    return principal or fallback
+
+
+def get_public_product_gallery_images(
+    image_rows,
+    *,
+    exists_cache: dict[tuple[int, str], bool] | None = None,
+):
+    """
+    Return at most one valid image per variant plus at most one valid product-level image.
+
+    Selection per group:
+      1. first valid principal image by orden/id
+      2. otherwise first valid image by orden/id
+    """
+
+    valid_images = get_existing_product_images(image_rows, exists_cache=exists_cache)
+    grouped_images: dict[int | None, list] = {}
+
+    for image in valid_images:
+        grouped_images.setdefault(image.variante_id, []).append(image)
+
+    selected_images = []
+    for grouped in grouped_images.values():
+        chosen = _pick_best_image_candidate(grouped)
+        if chosen is not None:
+            selected_images.append(chosen)
+
+    return sorted(selected_images, key=lambda image: (image.orden, image.id))
+
+
+def get_variante_imagen(
+    variante: "ProductoVariantesModel", exists_cache: dict[tuple[int, str], bool] | None = None
+) -> str | None:
     """Return the display image URL for *variante* using the canonical fallback chain."""
+
+    producto = variante.producto
+    exists_cache = exists_cache or _get_exists_cache(producto)
 
     # Step 1: variant principal image.
     if hasattr(variante, "_cached_variante_imagenes"):
-        # Prefetched + pre-ordered by (orden, id); filter es_principal in Python.
-        img = next(
-            (i for i in variante._cached_variante_imagenes if i.es_principal),
-            None,
-        )
+        variante_imagenes = variante._cached_variante_imagenes
     else:
-        img = variante.imagenes.filter(es_principal=True).order_by("orden", "id").first()
+        variante_imagenes = list(variante.imagenes.order_by("orden", "id"))
+
+    img = _first_existing_image(
+        variante_imagenes,
+        principal_only=True,
+        exists_cache=exists_cache,
+    )
     if img:
-        return _url(img.imagen)
+        return _url(img.imagen, exists_cache=exists_cache)
 
     # Step 2: any variant image.
-    if hasattr(variante, "_cached_variante_imagenes"):
-        img = variante._cached_variante_imagenes[0] if variante._cached_variante_imagenes else None
-    else:
-        img = variante.imagenes.order_by("orden", "id").first()
+    img = _first_existing_image(variante_imagenes, exists_cache=exists_cache)
     if img:
-        return _url(img.imagen)
+        return _url(img.imagen, exists_cache=exists_cache)
 
     # Step 3: product principal image (not tied to a specific variant).
-    producto = variante.producto
     if hasattr(producto, "_cached_prod_imagenes"):
-        # Prefetched + pre-ordered by (orden, id); filter es_principal in Python.
-        img = next(
-            (i for i in producto._cached_prod_imagenes if i.es_principal),
-            None,
-        )
+        producto_imagenes = producto._cached_prod_imagenes
     else:
-        img = (
-            producto.imagenes.filter(variante__isnull=True, es_principal=True)
-            .order_by("orden", "id")
-            .first()
+        producto_imagenes = list(
+            producto.imagenes.filter(variante__isnull=True).order_by("orden", "id")
         )
+
+    img = _first_existing_image(
+        producto_imagenes,
+        principal_only=True,
+        exists_cache=exists_cache,
+    )
     if img:
-        return _url(img.imagen)
+        return _url(img.imagen, exists_cache=exists_cache)
 
     # Step 4: product.imagen fallback field.
-    return _url(producto.imagen)
+    return _url(producto.imagen, exists_cache=exists_cache)
 
 
 def get_producto_imagen(producto: "ProductosModel") -> str | None:
     """Return the public display image for *producto* while preserving legacy compatibility."""
 
-    legacy_image = _url(producto.imagen)
+    exists_cache = _get_exists_cache(producto)
+
+    legacy_image = _url(producto.imagen, exists_cache=exists_cache)
     if legacy_image:
         return legacy_image
 
@@ -88,31 +183,27 @@ def get_producto_imagen(producto: "ProductosModel") -> str | None:
         )
 
     for variante in variantes:
-        imagen = get_variante_imagen(variante)
+        imagen = get_variante_imagen(variante, exists_cache=exists_cache)
         if imagen:
             return imagen
 
     if hasattr(producto, "_cached_prod_imagenes"):
-        principal = next(
-            (img for img in producto._cached_prod_imagenes if img.es_principal),
-            None,
-        )
-        fallback = producto._cached_prod_imagenes[0] if producto._cached_prod_imagenes else None
+        producto_imagenes = producto._cached_prod_imagenes
     else:
-        principal = (
-            producto.imagenes.filter(variante__isnull=True, es_principal=True)
-            .order_by("orden", "id")
-            .first()
-        )
-        fallback = (
-            producto.imagenes.filter(variante__isnull=True)
-            .order_by("orden", "id")
-            .first()
+        producto_imagenes = list(
+            producto.imagenes.filter(variante__isnull=True).order_by("orden", "id")
         )
 
+    principal = _first_existing_image(
+        producto_imagenes,
+        principal_only=True,
+        exists_cache=exists_cache,
+    )
+    fallback = _first_existing_image(producto_imagenes, exists_cache=exists_cache)
+
     if principal:
-        return _url(principal.imagen)
+        return _url(principal.imagen, exists_cache=exists_cache)
     if fallback:
-        return _url(fallback.imagen)
+        return _url(fallback.imagen, exists_cache=exists_cache)
 
     return None
