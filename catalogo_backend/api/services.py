@@ -107,13 +107,9 @@ def _send_confirmation_email_bg(usuario_id: int, nombre: str, correo: str, codig
 
 def enviar_correo_confirmacion(usuario: UsuariosModel):
     codigo = generar_codigo_confirmacion(usuario)
-    # Envío en segundo plano: la petición HTTP retorna de inmediato sin esperar al SMTP.
-    t = threading.Thread(
-        target=_send_confirmation_email_bg,
-        args=(usuario.id, usuario.nombre, usuario.correo, codigo),
-        daemon=True,
-    )
-    t.start()
+    # Envío síncrono: Asegura que Gunicorn/Railway no mate el proceso antes de enviar el correo a Resend.
+    # El usuario esperará ~1-2 segundos en el frontend, lo cual es aceptable para un registro.
+    _send_confirmation_email_bg(usuario.id, usuario.nombre, usuario.correo, codigo)
     return True, "Correo enviado"
 
 
@@ -187,13 +183,8 @@ def _send_recovery_email_bg(usuario_id: int, nombre: str, correo: str, codigo: s
 
 def enviar_correo_recuperacion(usuario: UsuariosModel):
     codigo = generar_codigo_confirmacion(usuario)
-    # Envío en segundo plano: la petición HTTP retorna de inmediato sin esperar al SMTP.
-    t = threading.Thread(
-        target=_send_recovery_email_bg,
-        args=(usuario.id, usuario.nombre, usuario.correo, codigo),
-        daemon=True,
-    )
-    t.start()
+    # Envío síncrono: Asegura que Gunicorn/Railway no mate el proceso antes de enviar el correo a Resend.
+    _send_recovery_email_bg(usuario.id, usuario.nombre, usuario.correo, codigo)
     return True, "Correo de recuperación enviado"
 
 
