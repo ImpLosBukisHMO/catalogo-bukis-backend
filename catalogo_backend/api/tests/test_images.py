@@ -34,7 +34,13 @@ def _media_url(path: str) -> str:
     return f"{settings.MEDIA_URL}{path}"
 
 
-def _create_user(email: str, staff: bool = False) -> UsuariosModel:
+def _create_user(
+    email: str,
+    staff: bool = False,
+    *,
+    worker_role: str | None = None,
+    can_edit_products: bool = False,
+) -> UsuariosModel:
     user = UsuariosModel.objects.create_user(
         nombre="Test",
         apellido="User",
@@ -43,9 +49,20 @@ def _create_user(email: str, staff: bool = False) -> UsuariosModel:
         password="testpass123",
         staff=staff,
     )
-    if staff:
+    update_fields = []
+    if worker_role is not None:
+        user.worker_role = worker_role
+        update_fields.append("worker_role")
+    elif staff:
         user.worker_role = UsuariosModel.WorkerRole.TOTAL
-        user.save(update_fields=["worker_role"])
+        update_fields.append("worker_role")
+
+    if can_edit_products:
+        user.can_edit_products = True
+        update_fields.append("can_edit_products")
+
+    if update_fields:
+        user.save(update_fields=update_fields)
     return user
 
 
@@ -63,6 +80,7 @@ def _create_product(
     imagen: str = "img/products/default.jpg",
     *,
     create_file: bool = True,
+    worker: UsuariosModel | None = None,
 ) -> ProductosModel:
     if imagen and create_file:
         _create_media_file(imagen)
@@ -75,6 +93,7 @@ def _create_product(
         medidas="10x10x10",
         disponible=True,
         estado=ProductosModel.EstadoProducto.ACTIVE,
+        worker=worker,
     )
 
 
@@ -405,10 +424,8 @@ class PublicProductImageEndpointContractTest(ImageStorageTestCase):
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual([item["id"] for item in response.data], [expected.id])
 
-    def test_worker_product_images_list_keeps_all_valid_rows_for_management(self):
-        worker = _create_user("gallery-worker@test.com", staff=True)
-        worker.can_edit_products = True
-        worker.save(update_fields=["can_edit_products"])
+    def test_worker_product_images_list_keeps_public_shape_for_authenticated_worker(self):
+        worker = _create_user("gallery-worker@test.com", staff=True, can_edit_products=True)
         self.client.force_authenticate(user=worker)
 
         producto = _create_product("Worker Gallery", imagen="")
@@ -430,7 +447,42 @@ class PublicProductImageEndpointContractTest(ImageStorageTestCase):
         response = self.client.get(f"/api/productos-imagenes/?producto={producto.id}")
 
         self.assertEqual(response.status_code, 200, response.data)
-        self.assertEqual([item["id"] for item in response.data], [image_a.id, image_b.id])
+        self.assertEqual([item["id"] for item in response.data], [image_a.id])
+
+    def test_partial_worker_get_on_foreign_product_does_not_receive_management_shape(self):
+        owner = _create_user(
+            "gallery-owner@test.com",
+            staff=True,
+            worker_role=UsuariosModel.WorkerRole.TOTAL,
+        )
+        partial_worker = _create_user(
+            "gallery-partial@test.com",
+            staff=True,
+            worker_role=UsuariosModel.WorkerRole.PARCIAL,
+            can_edit_products=True,
+        )
+        self.client.force_authenticate(user=partial_worker)
+
+        producto = _create_product("Foreign Worker Gallery", imagen="", worker=owner)
+        variante = _create_variant(producto, _create_color("Foreign", "#7744AA"))
+        image_a = _attach_image(
+            producto,
+            variante=variante,
+            path="img/products/galeria/foreign-gallery-a.jpg",
+            es_principal=True,
+            orden=0,
+        )
+        _attach_image(
+            producto,
+            variante=variante,
+            path="img/products/galeria/foreign-gallery-b.jpg",
+            orden=1,
+        )
+
+        response = self.client.get(f"/api/productos-imagenes/?producto={producto.id}")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual([item["id"] for item in response.data], [image_a.id])
 
 
 class PublicProductGalleryHelperTest(ImageStorageTestCase):
