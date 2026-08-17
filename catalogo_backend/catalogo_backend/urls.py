@@ -14,13 +14,19 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
-from django.contrib import admin
-from django.urls import path, include
-from rest_framework import status
-from rest_framework.response import Response
-from rest_framework.decorators import api_view
+import re
+
 from django.conf import settings
-from django.conf.urls.static import static
+from django.contrib import admin
+from django.urls import include, path, re_path
+from django.views.static import serve as static_serve
+from rest_framework import status
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+
+
+def serve_media(request, path, **kwargs):
+    return static_serve(request, path, document_root=settings.MEDIA_ROOT, **kwargs)
 
 
 @api_view(["GET"])
@@ -34,5 +40,12 @@ urlpatterns = [
     path("api/", include("api.urls")),
 ]
 
-# Sirve media files siempre — en prod el MEDIA_ROOT apunta al Railway Volume
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+media_url = settings.MEDIA_URL.lstrip("/")
+
+if media_url:
+    if not media_url.endswith("/"):
+        media_url = f"{media_url}/"
+
+    urlpatterns += [
+        re_path(rf"^{re.escape(media_url)}(?P<path>.*)$", serve_media, name="media"),
+    ]
