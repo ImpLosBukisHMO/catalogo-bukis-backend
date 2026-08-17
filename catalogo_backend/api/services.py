@@ -101,14 +101,15 @@ def _send_confirmation_email_bg(usuario_id: int, nombre: str, correo: str, codig
             mail_subject=mail_subject,
             html_body=html_body,
         )
+        return True, "Correo enviado exitosamente."
     except Exception as e:
         logger.error("Error de SMTP al enviar correo de confirmación a %s (user_id=%s): %s", correo, usuario_id, e)
+        return False, f"Error del servidor de correo: {str(e)}"
 
 
 def enviar_correo_confirmacion(usuario: UsuariosModel):
     codigo = generar_codigo_confirmacion(usuario)
-    _send_confirmation_email_bg(usuario.id, usuario.nombre, usuario.correo, codigo)
-    return True, "Correo enviado"
+    return _send_confirmation_email_bg(usuario.id, usuario.nombre, usuario.correo, codigo)
 
 
 def confirmar_cuenta_codigo(correo: str, codigo: str):
@@ -175,14 +176,15 @@ def _send_recovery_email_bg(usuario_id: int, nombre: str, correo: str, codigo: s
             mail_subject=mail_subject,
             html_body=html_body,
         )
+        return True, "Correo de recuperación enviado exitosamente."
     except Exception as e:
         logger.error("Error de SMTP al enviar correo de recuperación a %s (user_id=%s): %s", correo, usuario_id, e)
+        return False, f"Error del servidor de correo: {str(e)}"
 
 
 def enviar_correo_recuperacion(usuario: UsuariosModel):
     codigo = generar_codigo_confirmacion(usuario)
-    _send_recovery_email_bg(usuario.id, usuario.nombre, usuario.correo, codigo)
-    return True, "Correo de recuperación enviado"
+    return _send_recovery_email_bg(usuario.id, usuario.nombre, usuario.correo, codigo)
 
 
 def restablecer_password(correo: str, codigo: str, nueva_password: str):
