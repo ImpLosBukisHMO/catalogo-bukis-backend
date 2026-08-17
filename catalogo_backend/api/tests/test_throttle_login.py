@@ -104,17 +104,23 @@ class LoginThrottleByAccountTests(TestCase):
         self.assertEqual(res.status_code, 429)
 
     def test_throttle_cache_key_usa_hash_correo(self):
+        from unittest.mock import MagicMock
         from api.throttles import LoginByAccountThrottle
-        from django.test import RequestFactory
         
-        factory = RequestFactory()
-        request = factory.post(LOGIN_URL, {"correo": "Hash@Test.com", "password": "123"}, format="json")
+        # Simular un request DRF con .data
+        request = MagicMock()
+        request.data = {"correo": "Hash@Test.com", "password": "123"}
         
         view = type("Dummy", (), {})()
         throttle = LoginByAccountThrottle()
+        throttle.rate = "10/minute"
+        throttle.num_requests = 10
+        throttle.duration = 60
         key = throttle.get_cache_key(request, view)
         
         # El correo normalizado debe ser "hash@test.com"
         expected_hash = hashlib.sha256("hash@test.com".encode()).hexdigest()
         self.assertIn(expected_hash, key)
+        # No debe contener el correo en texto plano
         self.assertNotIn("hash@test.com", key)
+        self.assertNotIn("Hash@Test.com", key)

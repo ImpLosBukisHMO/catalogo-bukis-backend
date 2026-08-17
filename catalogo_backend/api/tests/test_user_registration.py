@@ -132,8 +132,11 @@ class PasswordValidationTests(TestCase):
     def setUp(self):
         self.client = APIClient()
 
+    _counter = 0
+
     def _intentar_registro_con_password(self, password):
-        payload = {**VALID_PAYLOAD, "correo": f"test_{password}@test.com", "password": password}
+        PasswordValidationTests._counter += 1
+        payload = {**VALID_PAYLOAD, "correo": f"pwtest{self._counter}@test.com", "password": password}
         return self.client.post(SIGNUP_URL, payload, format="json")
 
     def test_registro_con_password_sin_mayuscula_retorna_400(self):
@@ -174,6 +177,8 @@ class LoginSinVerificarTests(TestCase):
 
     def setUp(self):
         self.client = APIClient()
+        from django.core.cache import cache
+        cache.clear()
 
     def test_login_sin_verificar_retorna_401(self):
         """Un usuario sin verificar no puede iniciar sesión."""
