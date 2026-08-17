@@ -180,10 +180,9 @@ class LoginSinVerificarTests(TestCase):
         # LoginByIpThrottle / LoginByAccountThrottle usan el cache de Django
         # para contar intentos. Sin limpiar entre tests, los logins previos
         # de la suite disparan 429 en tests posteriores (flaky en CI).
-        cache.clear()
-        self.client = APIClient()
         from django.core.cache import cache
         cache.clear()
+        self.client = APIClient()
 
     def test_login_sin_verificar_retorna_401(self):
         """Un usuario sin verificar no puede iniciar sesión."""

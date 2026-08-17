@@ -607,10 +607,9 @@ class WorkerEndpointPermissionsTest(TestCase):
             self.client.get(reverse("worker-pedido-detail", args=[pedido.id])).status_code,
             status.HTTP_200_OK,
         )
-        self.assertEqual(
-            self.client.get(reverse("worker-pedido-comprobante", args=[pedido.id])).status_code,
-            status.HTTP_200_OK,
-        )
+        resp = self.client.get(reverse("worker-pedido-comprobante", args=[pedido.id]))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        resp.close()
 
         pedido.estado = PedidosModel.EstadoPedido.PENDIENTE
         pedido.comprobante_pago.delete(save=False)

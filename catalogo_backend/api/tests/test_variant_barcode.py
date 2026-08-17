@@ -133,7 +133,7 @@ class BarcodeMigrationGraphTest(TestCase):
         loader = MigrationLoader(connection, ignore_no_migrations=True)
         api_leaves = [node for node in loader.graph.leaf_nodes() if node[0] == "api"]
 
-        self.assertEqual(api_leaves, [("api", "0038_alter_direccionesmodel_calle_and_more")])
+        self.assertEqual(api_leaves, [("api", "0039_merge_20260816_2153")])
 
     def test_only_one_0022_api_migration_file_exists(self):
         migrations_dir = Path(__file__).resolve().parents[1] / "migrations"
