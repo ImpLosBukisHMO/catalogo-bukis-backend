@@ -6,6 +6,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, SAFE_METHODS
 from api.models import ProductosImagenesModel
 from api.permissions import CanEditProducts
 from api.serializers import ProductosImagenesSerializer
+from api.utils.imagenes import get_existing_product_images
 
 
 class ProductosImagenesListCreateView(generics.ListCreateAPIView):
@@ -28,6 +29,9 @@ class ProductosImagenesListCreateView(generics.ListCreateAPIView):
 
         if variante_id:
             qs = qs.filter(variante_id=variante_id)
+
+        if self.request.method in SAFE_METHODS:
+            return get_existing_product_images(qs)
 
         return qs
 

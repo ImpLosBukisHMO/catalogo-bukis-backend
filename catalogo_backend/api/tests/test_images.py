@@ -1,7 +1,12 @@
+import os
+import shutil
+import tempfile
+
 from django.conf import settings
 from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
+from django.test.utils import override_settings
 
 from rest_framework.test import APIClient
 
@@ -24,8 +29,10 @@ from api.serializers import (
 )
 from api.utils.imagenes import get_variante_imagen
 
+
 def _media_url(path: str) -> str:
     return f"{settings.MEDIA_URL}{path}"
+
 
 def _create_user(email: str, staff: bool = False) -> UsuariosModel:
     user = UsuariosModel.objects.create_user(
@@ -41,7 +48,24 @@ def _create_user(email: str, staff: bool = False) -> UsuariosModel:
         user.save(update_fields=["worker_role"])
     return user
 
-def _create_product(nombre: str, imagen: str = "img/products/default.jpg") -> ProductosModel:
+
+def _create_media_file(path: str) -> None:
+    if not path:
+        return
+    absolute_path = os.path.join(settings.MEDIA_ROOT, path)
+    os.makedirs(os.path.dirname(absolute_path), exist_ok=True)
+    with open(absolute_path, "wb") as file_obj:
+        file_obj.write(b"test-image")
+
+
+def _create_product(
+    nombre: str,
+    imagen: str = "img/products/default.jpg",
+    *,
+    create_file: bool = True,
+) -> ProductosModel:
+    if imagen and create_file:
+        _create_media_file(imagen)
     return ProductosModel.objects.create(
         nombre=nombre,
         imagen=imagen,
@@ -53,8 +77,10 @@ def _create_product(nombre: str, imagen: str = "img/products/default.jpg") -> Pr
         estado=ProductosModel.EstadoProducto.ACTIVE,
     )
 
+
 def _create_color(nombre: str, hex_value: str) -> ColorModel:
     return ColorModel.objects.create(nombre=nombre, hex=hex_value)
+
 
 def _create_variant(producto: ProductosModel, color: ColorModel, stock: int = 5) -> ProductoVariantesModel:
     return ProductoVariantesModel.objects.create(
@@ -71,7 +97,10 @@ def _attach_image(
     path: str,
     es_principal: bool = False,
     orden: int = 0,
+    create_file: bool = True,
 ) -> ProductosImagenesModel:
+    if path and create_file:
+        _create_media_file(path)
     return ProductosImagenesModel.objects.create(
         producto=producto,
         variante=variante,
@@ -80,7 +109,21 @@ def _attach_image(
         orden=orden,
     )
 
-class ImageConsumerCurrentBehaviorTest(TestCase):
+
+class ImageStorageTestCase(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.temp_media_root = tempfile.mkdtemp()
+        self.media_override = override_settings(MEDIA_ROOT=self.temp_media_root)
+        self.media_override.enable()
+
+    def tearDown(self):
+        self.media_override.disable()
+        shutil.rmtree(self.temp_media_root, ignore_errors=True)
+        super().tearDown()
+
+
+class ImageConsumerCurrentBehaviorTest(ImageStorageTestCase):
     def test_public_product_serializer_falls_back_to_worker_gallery_image_when_legacy_field_empty(self):
         producto = _create_product("Public Fallback", imagen="")
         variante = _create_variant(producto, _create_color("Cobre", "#B87333"))
@@ -166,8 +209,9 @@ class ImageConsumerCurrentBehaviorTest(TestCase):
         self.assertEqual(snapshot.imagen_principal_snapshot, _media_url("img/products/galeria/checkout-variant-any.jpg"))
 
 
-class PublicProductImageEndpointContractTest(TestCase):
+class PublicProductImageEndpointContractTest(ImageStorageTestCase):
     def setUp(self):
+        super().setUp()
         self.client = APIClient()
 
     def test_product_list_uses_gallery_fallback_when_legacy_image_is_missing(self):
@@ -217,7 +261,85 @@ class PublicProductImageEndpointContractTest(TestCase):
         payload = next(item for item in response.data["results"] if item["id"] == producto.id)
         self.assertEqual(payload["imagen"], _media_url("img/products/public-legacy-wins.jpg"))
 
-class VarianteImageHelperTest(TestCase):
+    def test_product_list_skips_missing_gallery_files_when_valid_gallery_file_exists(self):
+        producto = _create_product("Public Missing Gallery", imagen="")
+        variante = _create_variant(producto, _create_color("Missing Gallery", "#445566"))
+        _attach_image(
+            producto,
+            variante=variante,
+            path="img/products/galeria/public-missing-gallery-1.jpg",
+            es_principal=True,
+            orden=0,
+            create_file=False,
+        )
+        _attach_image(
+            producto,
+            variante=variante,
+            path="img/products/galeria/public-missing-gallery-2.jpg",
+            orden=1,
+            create_file=False,
+        )
+        _attach_image(
+            producto,
+            variante=variante,
+            path="img/products/galeria/public-valid-gallery.jpg",
+            orden=2,
+        )
+
+        response = self.client.get("/api/productos/")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        payload = next(item for item in response.data["results"] if item["id"] == producto.id)
+        self.assertEqual(payload["imagen"], _media_url("img/products/galeria/public-valid-gallery.jpg"))
+
+    def test_product_detail_returns_null_when_all_gallery_and_legacy_files_are_missing(self):
+        producto = _create_product("All Missing", imagen="img/products/all-missing-legacy.jpg", create_file=False)
+        variante = _create_variant(producto, _create_color("No Files", "#112233"))
+        _attach_image(
+            producto,
+            variante=variante,
+            path="img/products/galeria/all-missing-1.jpg",
+            es_principal=True,
+            create_file=False,
+        )
+        _attach_image(
+            producto,
+            path="img/products/galeria/all-missing-2.jpg",
+            orden=1,
+            create_file=False,
+        )
+
+        response = self.client.get(f"/api/productos/{producto.id}/")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIsNone(response.data["imagen"])
+
+    def test_product_images_list_excludes_rows_with_missing_files(self):
+        producto = _create_product("Gallery List", imagen="")
+        valid_image = _attach_image(
+            producto,
+            path="img/products/galeria/gallery-list-valid.jpg",
+            orden=1,
+        )
+        _attach_image(
+            producto,
+            path="img/products/galeria/gallery-list-missing.jpg",
+            orden=0,
+            create_file=False,
+        )
+
+        response = self.client.get(f"/api/productos-imagenes/?producto={producto.id}")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual([item["id"] for item in response.data], [valid_image.id])
+        self.assertTrue(
+            response.data[0]["imagen"].endswith(
+                _media_url("img/products/galeria/gallery-list-valid.jpg")
+            )
+        )
+
+
+class VarianteImageHelperTest(ImageStorageTestCase):
     def test_returns_variant_principal_image(self):
         producto = _create_product("Helper Principal")
         variante = _create_variant(producto, _create_color("Coral", "#FF7F50"))
@@ -270,7 +392,7 @@ class VarianteImageHelperTest(TestCase):
         self.assertIsNone(result)
         self.assertTrue(isinstance(result, str) or result is None)
 
-class VarianteOrderingTest(TestCase):
+class VarianteOrderingTest(ImageStorageTestCase):
     def test_producto_detalle_serializer_uses_color_name_ordering(self):
         producto = _create_product("Detalle")
         color_z = _create_color("Zafiro", "#123456")
@@ -367,7 +489,7 @@ def _build_worker_variant_dataset(n: int, color_offset: int = 0):
     return variants
 
 
-class WorkerVariantListQueryCountTest(TestCase):
+class WorkerVariantListQueryCountTest(ImageStorageTestCase):
     """
     Invariant: the total SQL query count for GET /api/worker/variants/ MUST be
     constant regardless of the number of variants returned.
@@ -378,6 +500,7 @@ class WorkerVariantListQueryCountTest(TestCase):
     """
 
     def setUp(self):
+        super().setUp()
         self.worker = _create_user("worker-qcount@test.com", staff=True)
 
     def _get_query_count(self, client: APIClient) -> int:
@@ -419,8 +542,9 @@ class WorkerVariantListQueryCountTest(TestCase):
         )
 
 
-class WorkerVariantListResponseContractTest(TestCase):
+class WorkerVariantListResponseContractTest(ImageStorageTestCase):
     def setUp(self):
+        super().setUp()
         self.worker = _create_user("worker-contract@test.com", staff=True)
 
     def test_response_shape_and_imagen_principal_contract_remain_unchanged(self):
@@ -506,7 +630,7 @@ class WorkerVariantListResponseContractTest(TestCase):
         self.assertIn(_media_url("img/products/contract-default.jpg"), imagenes)
 
 
-class VarianteImageHelperCacheBranchTest(TestCase):
+class VarianteImageHelperCacheBranchTest(ImageStorageTestCase):
     """
     Unit tests for the prefetch-cache code path in get_variante_imagen().
 
@@ -522,6 +646,7 @@ class VarianteImageHelperCacheBranchTest(TestCase):
     """
 
     def setUp(self):
+        super().setUp()
         producto = _create_product("Cache Branch Prod", imagen="img/products/cache-default.jpg")
         self.variante = _create_variant(producto, _create_color("CacheColor", "#CACACA"))
         self.producto = producto
@@ -552,6 +677,7 @@ class VarianteImageHelperCacheBranchTest(TestCase):
             es_principal=True,
             orden=0,
         )
+        _create_media_file("img/products/galeria/cached-principal.jpg")
         self.producto._cached_prod_imagenes = [cached_img]
 
         with CaptureQueriesContext(connection) as ctx_with:
