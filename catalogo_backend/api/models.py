@@ -180,7 +180,7 @@ class ProductosModel(models.Model):
     imagen = models.ImageField(upload_to=get_product_image_path, null=False)
     descripcion = models.TextField(default="")
     precio = models.DecimalField(max_digits=10, decimal_places=2, null=False)
-    peso = models.DecimalField(max_digits=10, decimal_places=2, null=False)
+    peso = models.CharField(max_length=100, null=False, default="")
     medidas = models.TextField(null=False)
     capacidad = models.CharField(max_length=50, null=True, blank=True)
     disponible = models.BooleanField(default=True)
