@@ -411,6 +411,51 @@ class PublicProductImageEndpointContractTest(ImageStorageTestCase):
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual([item["id"] for item in response.data], [expected.id])
 
+    def test_variant_scoped_images_list_returns_all_existing_images_for_same_variant(self):
+        producto = _create_product("Variant Gallery", imagen="")
+        variante = _create_variant(producto, _create_color("Galeria", "#121212"))
+        second = _attach_image(
+            producto,
+            variante=variante,
+            path="img/products/galeria/variant-gallery-second.jpg",
+            orden=1,
+        )
+        first = _attach_image(
+            producto,
+            variante=variante,
+            path="img/products/galeria/variant-gallery-first.jpg",
+            es_principal=True,
+            orden=3,
+        )
+
+        response = self.client.get(f"/api/productos-imagenes/?variante={variante.id}")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual([item["id"] for item in response.data], [second.id, first.id])
+
+    def test_variant_scoped_images_list_excludes_missing_files(self):
+        producto = _create_product("Variant Gallery Missing", imagen="")
+        variante = _create_variant(producto, _create_color("Faltante", "#343434"))
+        expected = _attach_image(
+            producto,
+            variante=variante,
+            path="img/products/galeria/variant-gallery-valid.jpg",
+            orden=1,
+        )
+        _attach_image(
+            producto,
+            variante=variante,
+            path="img/products/galeria/variant-gallery-missing.jpg",
+            es_principal=True,
+            orden=0,
+            create_file=False,
+        )
+
+        response = self.client.get(f"/api/productos-imagenes/?variante={variante.id}")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual([item["id"] for item in response.data], [expected.id])
+
     def test_public_product_images_list_returns_one_valid_image_per_variant(self):
         producto = _create_product("Two Variants", imagen="")
         variante_a = _create_variant(producto, _create_color("A", "#220011"))
