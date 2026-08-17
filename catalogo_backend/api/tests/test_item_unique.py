@@ -24,7 +24,7 @@ def _create_product(nombre: str = "Producto Test") -> ProductosModel:
         imagen="img/products/default.jpg",
         descripcion="desc",
         precio=Decimal("100.00"),
-        peso=Decimal("1.00"),
+        peso="1.00",
         medidas="10x10x10",
         disponible=True,
     )
@@ -65,7 +65,7 @@ def _create_product_for_worker(worker: UsuariosModel, nombre: str = "Producto Wo
         imagen="img/products/default.jpg",
         descripcion="desc",
         precio=Decimal("100.00"),
-        peso=Decimal("1.00"),
+        peso="1.00",
         medidas="10x10x10",
         disponible=True,
         worker=worker,

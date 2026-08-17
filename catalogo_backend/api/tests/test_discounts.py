@@ -77,7 +77,7 @@ def _create_product(
         imagen="img/products/default.jpg",
         descripcion=f"{nombre} desc",
         precio=precio,
-        peso=Decimal("1.00"),
+        peso="1.00",
         medidas="10x10x10",
         disponible=True,
         estado=ProductosModel.EstadoProducto.ACTIVE,
