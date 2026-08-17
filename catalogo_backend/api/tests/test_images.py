@@ -20,6 +20,7 @@ from api.serializers import (
     CarritoItemReadSerializer,
     FavoritoVarianteSerializer,
     ProductoDetalleSerializer,
+    ProductosSerializer,
 )
 from api.utils.imagenes import get_variante_imagen
 
@@ -80,6 +81,34 @@ def _attach_image(
     )
 
 class ImageConsumerCurrentBehaviorTest(TestCase):
+    def test_public_product_serializer_falls_back_to_worker_gallery_image_when_legacy_field_empty(self):
+        producto = _create_product("Public Fallback", imagen="")
+        variante = _create_variant(producto, _create_color("Cobre", "#B87333"))
+        _attach_image(
+            producto,
+            variante=variante,
+            path="img/products/galeria/public-fallback.jpg",
+            es_principal=True,
+        )
+
+        data = ProductosSerializer(producto).data
+
+        self.assertEqual(data["imagen"], _media_url("img/products/galeria/public-fallback.jpg"))
+
+    def test_public_product_serializer_preserves_legacy_image_when_present(self):
+        producto = _create_product("Legacy Public", imagen="img/products/legacy-public.jpg")
+        variante = _create_variant(producto, _create_color("Bronce", "#CD7F32"))
+        _attach_image(
+            producto,
+            variante=variante,
+            path="img/products/galeria/public-ignored.jpg",
+            es_principal=True,
+        )
+
+        data = ProductosSerializer(producto).data
+
+        self.assertEqual(data["imagen"], _media_url("img/products/legacy-public.jpg"))
+
     def test_favorito_serializer_returns_variant_principal_image(self):
         producto = _create_product("Favorito")
         variante = _create_variant(producto, _create_color("Rojo", "#FF0000"))
@@ -135,6 +164,58 @@ class ImageConsumerCurrentBehaviorTest(TestCase):
         self.assertEqual(response.status_code, 201, response.data)
         snapshot = PedidoProductosModel.objects.get(pedido_id=response.data["pedido_id"])
         self.assertEqual(snapshot.imagen_principal_snapshot, _media_url("img/products/galeria/checkout-variant-any.jpg"))
+
+
+class PublicProductImageEndpointContractTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_product_list_uses_gallery_fallback_when_legacy_image_is_missing(self):
+        producto = _create_product("Public List Fallback", imagen="")
+        variante = _create_variant(producto, _create_color("Fallback List", "#BADA55"))
+        _attach_image(
+            producto,
+            variante=variante,
+            path="img/products/galeria/public-list-fallback.jpg",
+            es_principal=True,
+        )
+
+        response = self.client.get("/api/productos/")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        payload = next(item for item in response.data["results"] if item["id"] == producto.id)
+        self.assertEqual(payload["imagen"], _media_url("img/products/galeria/public-list-fallback.jpg"))
+
+    def test_product_detail_uses_gallery_fallback_when_legacy_image_is_missing(self):
+        producto = _create_product("Public Detail Fallback", imagen="")
+        variante = _create_variant(producto, _create_color("Fallback Detail", "#55DADA"))
+        _attach_image(
+            producto,
+            variante=variante,
+            path="img/products/galeria/public-detail-fallback.jpg",
+            es_principal=True,
+        )
+
+        response = self.client.get(f"/api/productos/{producto.id}/")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["imagen"], _media_url("img/products/galeria/public-detail-fallback.jpg"))
+
+    def test_product_list_preserves_legacy_image_when_gallery_image_also_exists(self):
+        producto = _create_product("Public Legacy Wins", imagen="img/products/public-legacy-wins.jpg")
+        variante = _create_variant(producto, _create_color("Legacy Wins", "#DADA55"))
+        _attach_image(
+            producto,
+            variante=variante,
+            path="img/products/galeria/public-legacy-ignored.jpg",
+            es_principal=True,
+        )
+
+        response = self.client.get("/api/productos/")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        payload = next(item for item in response.data["results"] if item["id"] == producto.id)
+        self.assertEqual(payload["imagen"], _media_url("img/products/public-legacy-wins.jpg"))
 
 class VarianteImageHelperTest(TestCase):
     def test_returns_variant_principal_image(self):
