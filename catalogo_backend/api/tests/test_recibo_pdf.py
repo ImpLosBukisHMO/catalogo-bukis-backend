@@ -150,6 +150,16 @@ class ReciboPdfViewTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_non_staff_worker_role_is_forbidden_on_client_endpoint(self):
+        pedido = self.create_pedido(owner=self.worker_total)
+        self.worker_total.is_staff = False
+        self.worker_total.save(update_fields=["is_staff"])
+        self.auth(self.worker_total)
+
+        response = self.client_api.get(reverse("mi-pedido-recibo", kwargs={"id": pedido.id}))
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_worker_total_can_download_ready_order(self):
         pedido = self.create_pedido(estado=PedidosModel.EstadoPedido.LISTO)
         self.auth(self.worker_total)

@@ -275,7 +275,10 @@ class MiPedidoReciboPdfView(generics.GenericAPIView):
             return None
 
     def get(self, request, id, *args, **kwargs):
-        if request.user.is_staff:
+        if (
+            request.user.is_staff
+            or request.user.worker_role in ("total", "parcial")
+        ):
             return Response(
                 {"error": "No tienes permiso para ver este pedido."},
                 status=status.HTTP_403_FORBIDDEN,
