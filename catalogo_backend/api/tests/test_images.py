@@ -20,6 +20,7 @@ from api.serializers import (
     CarritoItemReadSerializer,
     FavoritoVarianteSerializer,
     ProductoDetalleSerializer,
+    ProductosSerializer,
 )
 from api.utils.imagenes import get_variante_imagen
 
@@ -80,6 +81,34 @@ def _attach_image(
     )
 
 class ImageConsumerCurrentBehaviorTest(TestCase):
+    def test_public_product_serializer_falls_back_to_worker_gallery_image_when_legacy_field_empty(self):
+        producto = _create_product("Public Fallback", imagen="")
+        variante = _create_variant(producto, _create_color("Cobre", "#B87333"))
+        _attach_image(
+            producto,
+            variante=variante,
+            path="img/products/galeria/public-fallback.jpg",
+            es_principal=True,
+        )
+
+        data = ProductosSerializer(producto).data
+
+        self.assertEqual(data["imagen"], _media_url("img/products/galeria/public-fallback.jpg"))
+
+    def test_public_product_serializer_preserves_legacy_image_when_present(self):
+        producto = _create_product("Legacy Public", imagen="img/products/legacy-public.jpg")
+        variante = _create_variant(producto, _create_color("Bronce", "#CD7F32"))
+        _attach_image(
+            producto,
+            variante=variante,
+            path="img/products/galeria/public-ignored.jpg",
+            es_principal=True,
+        )
+
+        data = ProductosSerializer(producto).data
+
+        self.assertEqual(data["imagen"], _media_url("img/products/legacy-public.jpg"))
+
     def test_favorito_serializer_returns_variant_principal_image(self):
         producto = _create_product("Favorito")
         variante = _create_variant(producto, _create_color("Rojo", "#FF0000"))

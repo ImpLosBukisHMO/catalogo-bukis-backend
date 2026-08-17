@@ -19,7 +19,7 @@ from api.models import (
 )
 from api import services
 from api.utils.comprobantes import get_comprobante_display_name
-from api.utils.imagenes import get_variante_imagen
+from api.utils.imagenes import get_producto_imagen, get_variante_imagen
 
 
 # =========================
@@ -90,6 +90,7 @@ class ColorMiniSerializer(serializers.ModelSerializer):
 # =========================
 
 class ProductosSerializer(serializers.ModelSerializer):
+    imagen = serializers.SerializerMethodField()
     categoria = serializers.PrimaryKeyRelatedField(
         queryset=CategoriasModel.objects.all(),
         allow_null=True,
@@ -120,6 +121,9 @@ class ProductosSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+    def get_imagen(self, obj):
+        return get_producto_imagen(obj)
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
         
@@ -139,10 +143,14 @@ class ProductosSerializer(serializers.ModelSerializer):
 
 class ProductoMiniSerializer(serializers.ModelSerializer):
     categoria = CategoriasSerializer(read_only=True)
+    imagen = serializers.SerializerMethodField()
 
     class Meta:
         model = ProductosModel
         fields = ["id", "nombre", "imagen", "precio", "categoria"]
+
+    def get_imagen(self, obj):
+        return get_producto_imagen(obj)
 
 
 # =========================
