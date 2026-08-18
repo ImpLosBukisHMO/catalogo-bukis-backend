@@ -4,9 +4,6 @@ from django.core.mail import EmailMultiAlternatives
 from django.utils.html import escape, strip_tags
 # pyrefly: ignore [missing-import]
 from django.conf import settings
-# pyrefly: ignore [missing-import]
-from django.contrib.staticfiles import finders
-from email.mime.image import MIMEImage
 from datetime import date
 from html import unescape
 import logging
@@ -23,6 +20,8 @@ def escape_email_text(value, default=""):
     return escape(str(value))
 
 def send_bukis_email(recipient_name, recipient_email, mail_subject, html_body):
+    backend_url = getattr(settings, 'BACKEND_URL', 'http://localhost:8000').rstrip('/')
+    logo_url = f"{backend_url}/{settings.STATIC_URL}img/logo.png"
     display_name = escape_email_text(recipient_name, "cliente")
 
     full_mail = f"""<!DOCTYPE html>
@@ -40,7 +39,7 @@ def send_bukis_email(recipient_name, recipient_email, mail_subject, html_body):
           <tr>
             <td style="background-color: #ffffff; padding: 32px 32px 24px 32px; text-align: center; border-bottom: 1px solid #e2e8f0;">
               <div style="border: 1px solid #dd0000; display: inline-block; padding: 14px 24px; border-radius: 12px; margin-bottom: 10px;">
-                <img src="cid:logo_bukis" alt="Los Bukis" width="160" style="max-width: 160px; height: auto; display: block; margin: 0 auto;">
+                <img src="{logo_url}" alt="Los Bukis" width="160" style="max-width: 160px; height: auto; display: block; margin: 0 auto;">
               </div>
               <div style="font-size: 1.3em; font-weight: 700; color: #dd0000; letter-spacing: 2px; text-transform: uppercase;">
                 Importaciones Los Bukis
@@ -87,20 +86,6 @@ def send_bukis_email(recipient_name, recipient_email, mail_subject, html_body):
     )
 
     msg.attach_alternative(full_mail, "text/html")
-    logo_path = finders.find("img/logo.png")
-
-    if logo_path:
-        try:
-            with open(logo_path, "rb") as f:
-                img = MIMEImage(f.read())
-                img.add_header('Content-ID', '<logo_bukis>')
-                img.add_header('Content-Disposition', 'inline', filename='logo.png')
-                msg.attach(img)
-        except Exception as e:
-            print(f"No se pudo adjuntar el logo: {e}")
-    else:
-        print("Advertencia: No se encontró img/logo.png en los estáticos.")
-
     msg.send(fail_silently=False)
 
 
