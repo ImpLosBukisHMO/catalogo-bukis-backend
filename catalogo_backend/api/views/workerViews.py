@@ -18,7 +18,14 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 # pyrefly: ignore [missing-import]
 from rest_framework import status, generics
-from api.permissions import IsWorker
+from api.permissions import (
+    CanAddProducts,
+    CanEditProducts,
+    CanManageDiscountCodes,
+    IsWorker,
+    ProductFieldPermission,
+    VariantFieldPermission,
+)
 from api.models import (
     ProductosModel,
     ProductoVariantesModel,
@@ -38,21 +45,36 @@ from api.serializer.worker import (
     WorkerImagenCreateSerializer,
 )
 from api.utils.comprobantes import build_comprobante_response
+from api.utils.recibos import (
+    RECIBO_ALLOWED_STATES,
+    build_recibo_response_for_pedido,
+)
+from django.shortcuts import get_object_or_404
 
 
 # =========================
 # WORKER - DESCUENTOS
 # =========================
 class WorkerDescuentosListCreate(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated, IsWorker]
+    permission_classes = [IsAuthenticated, CanManageDiscountCodes]
     queryset = DescuentosModel.objects.all()
     serializer_class = WorkerDescuentosSerializer
 
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsAuthenticated(), CanManageDiscountCodes()]
+        return [IsAuthenticated(), IsWorker()]
+
 class WorkerDescuentosRetrieveUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [IsAuthenticated, IsWorker]
+    permission_classes = [IsAuthenticated, CanManageDiscountCodes]
     queryset = DescuentosModel.objects.all()
     serializer_class = WorkerDescuentosSerializer
     lookup_field = 'id'
+
+    def get_permissions(self):
+        if self.request.method in {"PATCH", "PUT", "DELETE"}:
+            return [IsAuthenticated(), CanManageDiscountCodes()]
+        return [IsAuthenticated(), IsWorker()]
 
 
 class WorkerDescuentosTiposView(APIView):
@@ -160,6 +182,24 @@ class WorkerPedidoComprobanteDownloadView(APIView):
             return Response({"error": "El pedido no tiene comprobante."}, status=status.HTTP_404_NOT_FOUND)
 
         return build_comprobante_response(pedido.comprobante_pago)
+
+
+class WorkerPedidoReciboPdfView(APIView):
+    permission_classes = [IsAuthenticated, IsWorker]
+
+    def get(self, request, pedido_id):
+        pedido = get_object_or_404(
+            PedidosModel.objects.select_related("cliente", "direccion").prefetch_related("items"),
+            pk=pedido_id,
+        )
+
+        if pedido.estado not in RECIBO_ALLOWED_STATES:
+            return Response(
+                {"error": "El recibo no está disponible para el estado actual del pedido."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        return build_recibo_response_for_pedido(pedido)
 
 
 # =========================
@@ -330,6 +370,11 @@ class WorkerCambiarEstadoView(APIView):
 class WorkerProductoListCreateView(APIView):
     permission_classes = [IsAuthenticated, IsWorker]
 
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsAuthenticated(), CanAddProducts()]
+        return [IsAuthenticated(), IsWorker()]
+
     def get(self, request):
         qs = (
             ProductosModel.objects
@@ -353,6 +398,11 @@ class WorkerProductoListCreateView(APIView):
 # =========================
 class WorkerProductoUpdateView(APIView):
     permission_classes = [IsAuthenticated, IsWorker]
+
+    def get_permissions(self):
+        if self.request.method == "PATCH":
+            return [IsAuthenticated(), ProductFieldPermission()]
+        return [IsAuthenticated(), IsWorker()]
 
     def _get_producto_propio(self, request, producto_id):
         try:
@@ -384,7 +434,7 @@ class WorkerProductoUpdateView(APIView):
 # WORKER - AGREGAR VARIANTE A PRODUCTO PROPIO
 # =========================
 class WorkerVarianteCreateView(APIView):
-    permission_classes = [IsAuthenticated, IsWorker]
+    permission_classes = [IsAuthenticated, CanEditProducts]
 
     def post(self, request, producto_id):
         try:
@@ -408,6 +458,11 @@ class WorkerVarianteCreateView(APIView):
 # =========================
 class WorkerVarianteDetailView(APIView):
     permission_classes = [IsAuthenticated, IsWorker]
+
+    def get_permissions(self):
+        if self.request.method == "PATCH":
+            return [IsAuthenticated(), VariantFieldPermission()]
+        return [IsAuthenticated(), IsWorker()]
 
     def _get_variante_propia(self, request, variante_id):
         """Devuelve la variante solo si su producto pertenece al worker autenticado."""
@@ -444,7 +499,7 @@ class WorkerVarianteDetailView(APIView):
 # WORKER - SUBIR IMAGEN A PRODUCTO PROPIO
 # =========================
 class WorkerImagenCreateView(APIView):
-    permission_classes = [IsAuthenticated, IsWorker]
+    permission_classes = [IsAuthenticated, CanEditProducts]
 
     def post(self, request, producto_id):
         try:

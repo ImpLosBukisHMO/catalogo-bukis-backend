@@ -137,6 +137,8 @@ class WorkerCambiarEstadoEmailEscapingTest(TestCase):
             password="testpass123",
             staff=True,
         )
+        self.worker.worker_role = UsuariosModel.WorkerRole.TOTAL
+        self.worker.save(update_fields=["worker_role"])
         self.cliente = UsuariosModel.objects.create_user(
             nombre='Ana <script>alert(1)</script>',
             apellido='Cliente',

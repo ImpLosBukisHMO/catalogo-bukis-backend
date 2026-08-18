@@ -49,7 +49,7 @@ def _create_variant(
 
 
 def _create_worker(email: str = "worker@test.com") -> UsuariosModel:
-    return UsuariosModel.objects.create_user(
+    worker = UsuariosModel.objects.create_user(
         nombre="Worker",
         apellido="Test",
         correo=email,
@@ -57,6 +57,9 @@ def _create_worker(email: str = "worker@test.com") -> UsuariosModel:
         password="testpass123",
         staff=True,
     )
+    worker.worker_role = UsuariosModel.WorkerRole.TOTAL
+    worker.save(update_fields=["worker_role"])
+    return worker
 
 
 def _create_product_for_worker(worker: UsuariosModel, nombre: str = "Producto Worker") -> ProductosModel:

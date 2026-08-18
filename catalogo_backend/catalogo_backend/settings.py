@@ -16,6 +16,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dev-only-change-in-pr
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+BACKEND_URL = os.getenv('BACKEND_URL', 'http://localhost:8000')
 CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',') if os.environ.get('CSRF_TRUSTED_ORIGINS') else []
 
 if FRONTEND_URL and FRONTEND_URL not in CSRF_TRUSTED_ORIGINS:
@@ -124,6 +125,46 @@ CSRF_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
 CSRF_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
 SESSION_COOKIE_SECURE = not DEBUG
+
+# --- Cookie security (cross-site auth) ------------------------------------
+# En producción el frontend y el backend viven en dominios distintos (Railway),
+# por lo que las cookies de auth deben viajar en contexto cross-site.
+# Regla del navegador: cross-site requiere SameSite=None + Secure=True.
+# En desarrollo (DEBUG=True) usamos SameSite=Lax + Secure=False para poder
+# trabajar contra localhost sin HTTPS.
+#
+# Además, Railway termina TLS en su proxy y forwardea HTTP internamente.
+# Sin SECURE_PROXY_SSL_HEADER, Django ve request.is_secure() == False y
+# descarta silenciosamente las cookies marcadas con Secure=True.
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+COOKIE_SAMESITE = 'Lax' if DEBUG else 'None'
+COOKIE_SECURE = not DEBUG
+
+# Cookies gestionadas por Django (CSRF y sesión del admin)
+CSRF_COOKIE_SAMESITE = COOKIE_SAMESITE
+CSRF_COOKIE_SECURE = COOKIE_SECURE
+SESSION_COOKIE_SAMESITE = COOKIE_SAMESITE
+SESSION_COOKIE_SECURE = COOKIE_SECURE
+
+
+def cookie_security_kwargs():
+    """Kwargs para response.set_cookie / delete_cookie en las views de auth.
+
+    Centralizado para que login, refresh y logout compartan exactamente
+    los mismos atributos. Sin esto, el browser no matchea el delete_cookie
+    con el set_cookie original y las cookies quedan huérfanas al hacer logout.
+
+    Lee los settings dinámicamente en cada llamada para respetar
+    @override_settings en tests y cualquier cambio en runtime.
+    """
+    from django.conf import settings as _django_settings
+    return {
+        'samesite': _django_settings.COOKIE_SAMESITE,
+        'secure': _django_settings.COOKIE_SECURE,
+    }
+# --------------------------------------------------------------------------
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

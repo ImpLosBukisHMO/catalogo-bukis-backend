@@ -17,7 +17,7 @@ from api.models import (
 
 
 def _create_worker(email: str = "worker-publication@test.com") -> UsuariosModel:
-    return UsuariosModel.objects.create_user(
+    worker = UsuariosModel.objects.create_user(
         nombre="Worker",
         apellido="Publication",
         correo=email,
@@ -25,6 +25,9 @@ def _create_worker(email: str = "worker-publication@test.com") -> UsuariosModel:
         password="testpass123",
         staff=True,
     )
+    worker.worker_role = UsuariosModel.WorkerRole.TOTAL
+    worker.save(update_fields=["worker_role"])
+    return worker
 
 
 def _create_user(email: str = "shopper-publication@test.com") -> UsuariosModel:

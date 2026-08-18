@@ -76,6 +76,13 @@ class AdministradorDeUsuarios(BaseUserManager):
         usuario.is_active = True
         usuario.is_staff = staff
         usuario.is_superuser = superuser
+        # Keep worker_role in sync with staff flag so new staff accounts
+        # created post-migration are not silently locked out of IsWorker-gated
+        # endpoints. The 0038 migration back-fills existing is_staff=True rows
+        # to 'total'; this mirrors that invariant for every new account created
+        # through the manager (createsuperuser, Django Admin, seed scripts).
+        if staff:
+            usuario.worker_role = self.model.WorkerRole.TOTAL
         usuario.save()
 
         return usuario
@@ -113,6 +120,28 @@ class UsuariosModel(AbstractUser):
     is_admin = models.BooleanField(default=False)
     is_superuser = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
+
+    # Worker role system (Slice A1)
+    class WorkerRole(models.TextChoices):
+        NONE = "none", "None"
+        TOTAL = "total", "Total"
+        PARCIAL = "parcial", "Parcial"
+
+    worker_role = models.CharField(
+        max_length=10,
+        choices=WorkerRole.choices,
+        default=WorkerRole.NONE,
+        null=False,
+        blank=False,
+    )
+
+    # Granular capability flags — all default False (NOT NULL)
+    can_add_products          = models.BooleanField(default=False, null=False)
+    can_edit_products         = models.BooleanField(default=False, null=False)
+    can_edit_prices           = models.BooleanField(default=False, null=False)
+    can_manage_discount_codes = models.BooleanField(default=False, null=False)
+    can_apply_discounts       = models.BooleanField(default=False, null=False)
+    can_manage_offers         = models.BooleanField(default=False, null=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

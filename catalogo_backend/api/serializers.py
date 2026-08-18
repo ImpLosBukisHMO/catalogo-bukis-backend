@@ -1,5 +1,6 @@
 from django.urls import reverse
 from rest_framework import serializers
+from rest_framework.exceptions import PermissionDenied
 
 from api.models import (
     ProductosModel,
@@ -18,7 +19,7 @@ from api.models import (
 )
 from api import services
 from api.utils.comprobantes import get_comprobante_display_name
-from api.utils.imagenes import get_variante_imagen
+from api.utils.imagenes import get_producto_imagen, get_variante_imagen
 
 
 # =========================
@@ -89,6 +90,7 @@ class ColorMiniSerializer(serializers.ModelSerializer):
 # =========================
 
 class ProductosSerializer(serializers.ModelSerializer):
+    imagen = serializers.SerializerMethodField()
     categoria = serializers.PrimaryKeyRelatedField(
         queryset=CategoriasModel.objects.all(),
         allow_null=True,
@@ -119,6 +121,9 @@ class ProductosSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+    def get_imagen(self, obj):
+        return get_producto_imagen(obj)
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
         
@@ -138,10 +143,14 @@ class ProductosSerializer(serializers.ModelSerializer):
 
 class ProductoMiniSerializer(serializers.ModelSerializer):
     categoria = CategoriasSerializer(read_only=True)
+    imagen = serializers.SerializerMethodField()
 
     class Meta:
         model = ProductosModel
         fields = ["id", "nombre", "imagen", "precio", "categoria"]
+
+    def get_imagen(self, obj):
+        return get_producto_imagen(obj)
 
 
 # =========================
@@ -179,6 +188,30 @@ class ProductosImagenesSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def validate(self, attrs):
+        producto = attrs.get("producto") or getattr(self.instance, "producto", None)
+        variante = attrs.get("variante", getattr(self.instance, "variante", None))
+
+        if producto and variante and variante.producto_id != producto.id:
+            raise serializers.ValidationError(
+                {"variante_id": "La variante no pertenece a este producto."}
+            )
+
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if (
+            user
+            and getattr(user, "is_authenticated", False)
+            and getattr(user, "worker_role", "none") == "parcial"
+            and producto
+            and producto.worker_id != user.id
+        ):
+            raise PermissionDenied(
+                "No tienes permisos para modificar imágenes de este producto."
+            )
+
+        return attrs
 
 
 # =========================
