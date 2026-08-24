@@ -2,7 +2,7 @@ from django.http import Http404
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
-from api.models import CategoriasModel
+from api.models import CategoriasModel, ProductosModel
 from ..serializers import CategoriasSerializer
 
 """
@@ -23,8 +23,14 @@ class CategoriasListCreate(generics.ListCreateAPIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def get(self, request, *args, **kwargs):
-        usuarios = CategoriasModel.objects.all()
-        serializer = CategoriasSerializer(usuarios, many=True)
+        con_productos = request.query_params.get("con_productos") or request.query_params.get("solo_activas") or request.query_params.get("has_active_products")
+        qs = CategoriasModel.objects.all()
+        if con_productos and str(con_productos).strip().lower() in ("true", "1", "t", "yes", "si", "sí"):
+            qs = qs.filter(
+                productos__estado=ProductosModel.EstadoProducto.ACTIVE,
+                productos__disponible=True,
+            ).distinct()
+        serializer = CategoriasSerializer(qs, many=True)
         return Response({'datos': serializer.data}, status=status.HTTP_200_OK)
 
 
