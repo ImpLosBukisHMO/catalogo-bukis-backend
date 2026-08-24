@@ -224,12 +224,12 @@ class WorkerBannerOfertaSerializer(serializers.ModelSerializer):
             self._assert_max_active_slides(activo_efectivo)
             return super().update(instance, validated_data)
 
-# para productos
 class WorkerVariantSerializer(serializers.ModelSerializer):
     variant_id = serializers.IntegerField(source="id")
     producto = serializers.SerializerMethodField()
     color = serializers.SerializerMethodField()
     imagen_principal = serializers.SerializerMethodField()
+    imagenes = serializers.SerializerMethodField()
 
     class Meta:
         model = ProductoVariantesModel
@@ -242,6 +242,7 @@ class WorkerVariantSerializer(serializers.ModelSerializer):
             "stock",
             "activo",
             "imagen_principal",
+            "imagenes",
         ]
 
     # -------------------------
@@ -297,10 +298,26 @@ class WorkerVariantSerializer(serializers.ModelSerializer):
         }
 
     # -------------------------
-    # Imagen principal
+    # Imagen principal e imágenes
     # -------------------------
     def get_imagen_principal(self, obj):
         return get_variante_imagen(obj)
+
+    def get_imagenes(self, obj):
+        # Usamos el prefetch _cached_variante_imagenes si existe
+        if hasattr(obj, "_cached_variante_imagenes"):
+            imgs = obj._cached_variante_imagenes
+        else:
+            imgs = obj.imagenes.all().order_by("orden", "id")
+        
+        request = self.context.get("request")
+        return [
+            {
+                "id": img.id,
+                "imagen": request.build_absolute_uri(img.imagen.url) if request and img.imagen else (img.imagen.url if img.imagen else None)
+            }
+            for img in imgs
+        ]
 
 
 # para pedidos
